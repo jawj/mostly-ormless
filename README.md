@@ -85,7 +85,7 @@ So, I [forked schemats](https://github.com/PSYT/schemats) to generate some addit
 * **`Selectable`**: what I'll get back from a `SELECT` query. This is what schemats was already giving us.
 * **`Whereable`**: what I can use in a `WHERE` condition. This is approximately the same as `Selectable`, but all columns are optional. It is (subject to some later tweaks) a `Partial<Selectable>`.
 * **`Insertable`**: what I can `INSERT` into a table. This is also similar to `Selectable`, but any fields that are `NULL`able and/or have `DEFAULT` values are allowed to be missing, `NULL` or `DEFAULT`.
-* **`Updatable`**: what I can `UPDATE` a row with. This is similar to what I can `INSERT`, but all columns are optional: it a simple `Partial<Insertable>`.
+* **`Updatable`**: what I can `UPDATE` a row with. This is similar to what I can `INSERT`, but all columns are optional: it is a simple `Partial<Insertable>`.
 
 While hacking at schemats, I also got rid of the verbose two-stage approach, where a type alias is created for every column.
 
@@ -501,7 +501,7 @@ The last argument to `upsert` is the key or array of keys on which there could b
 In this case, the following query is issued:
 
 ```typescript
-{ text: 'INSERT INTO "appleTransactions" 
+{ text: 'INSERT INTO "appleTransactions"
     ("accountId", "environment", "latestReceiptData", "originalTransactionId") 
     VALUES ($1, $2, $3, $4), ($5, $6, $7, $8) 
     ON CONFLICT ("environment", "originalTransactionId") DO UPDATE 
