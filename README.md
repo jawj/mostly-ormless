@@ -18,7 +18,7 @@ Also, I'm greedy. I want all that, but I want to keep all the type-checking good
 In short, I want [cake](https://www.theguardian.com/books/2018/jul/05/word-of-the-week-cake). So I set out to see if I could rustle some up. As it turns out, this was about a week-long project in [three acts](https://en.wikipedia.org/wiki/Three-act_structure):
 
 * _[Act 1](#act1): In which we translate a Postgres schema into TypeScript types._ Spoiler: a project called [schemats](https://github.com/SweetIQ/schemats) will be forked and wrangled here.
-* _[Act 2](#act2): In which we use that type information to improve the ergonomics of writing raw SQL._ Spoiler: ES2015 [tagged templates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_templates) will play a starring role.
+* _[Act 2](#act2): In which we expand that type information and use it to improve the ergonomics of writing raw SQL._ Spoiler: ES2015 [tagged templates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_templates) will play a starring role.
 * _[Act 3](#act3): In which we create a set of simple shortcut functions on top, which looks a little bit like an ORM but really isn't._ Spoiler: Typescript [function signature overloads](https://www.typescriptlang.org/docs/handbook/functions.html) on concrete string values will be these functions' secret sauce.
 
 
@@ -78,16 +78,48 @@ export interface books {
     updatedAt: booksFields.updatedAt;
 }
 ```
-This is a helpful description of what you might get back from a `SELECT` query. But it doesn't cover everything we're going to need.
+This is a helpful description of what you might get back from a `SELECT` query, and we can use it as follows
 
-So, I [forked schemats](https://github.com/PSYT/schemats) to generate some additional type info, starting with the following 4 main interfaces:
+First, some housekeeping — we set up a connection pool:
+
+```typescript
+import * as pg from "pg";
+const pool = new pg.Pool({ /* connection options */ });
+```
+
+Then:
+
+```typescript
+const
+  authorId = 123,  // in production this could be untrusted input
+  result = await pool.query({
+    text: 'SELECT * FROM "books" WHERE "authorId" = $1',
+    values: [authorId],
+  }),
+  existingBooks: books[] = result.rows;
+```
+
+Our results now pop out fully typed. But there are still some real annoyances here:
+
+* There's nothing to stop me absent-mindedly or fat-fingeredly trying to query from the non-existent tables `"novels"` or `"boks"`, or according to the non-existent columns `"writerId"` or `"authorid"`, or indeed trying to equate my `"authorId"` with a string or date. There's no auto-complete to help me out, and any errors (whether introduced now or by a future schema update) will only become apparent later on, at runtime.
+* I have to keep track of the order of interpolated parameters, and provide them separately from the query text. That's only `authorId` in this instance, but there could be dozens.
+* Things are even worse for `INSERT`s and `UPDATE`s, where I need to generate separate, matching-ordered lists of column names and their corresponding values.
+
+So, here's the plan. I'm going to come up with some ES2015 [tagged templates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_templates) to improve these SQL-writing ergonomics in TypeScript. But first, to support that, I'm going to need some more complete type information about my tables.
+
+<a name="act2"></a>Act 2: In which we expand that type information and use it to improve the ergonomics of writing raw SQL
+--
+
+Specifically, I want the type information about my database tables to specify not just what I'll get back from a `SELECT` query, but also what I'm allowed to use in a `WHERE` condition, and what I can `INSERT` and `UPDATE` too.
+
+These are the four main interfaces I'm going to define:
 
 * **`Selectable`**: what I'll get back from a `SELECT` query. This is what schemats was already giving us.
 * **`Whereable`**: what I can use in a `WHERE` condition. This is approximately the same as `Selectable`, but all columns are optional. It is (subject to some later tweaks) a `Partial<Selectable>`.
 * **`Insertable`**: what I can `INSERT` into a table. This is also similar to `Selectable`, but any fields that are `NULL`able and/or have `DEFAULT` values are allowed to be missing, `NULL` or `DEFAULT`.
 * **`Updatable`**: what I can `UPDATE` a row with. This is similar to what I can `INSERT`, but all columns are optional: it is a simple `Partial<Insertable>`.
 
-While hacking at schemats, I also got rid of the verbose two-stage approach, where a type alias is created for every column.
+I [forked schemats](https://github.com/PSYT/schemats) to generate these interfaces. While I was at it I also got rid of the verbose, original, two-stage approach, where a type alias was created for every column.
 
 Ignoring a few additional bells and whistles, my schemats fork therefore now generates something like the following when run against the `books` table:
 
@@ -119,63 +151,37 @@ export const Default = Symbol('DEFAULT');
 export type DefaultType = typeof Default;
 ```
 
-Now, for example, if I have an object with data that I plan to insert into the `books` table, I can have that type-checked, and also enjoy auto-completion in VS Code, like so:
+If I'm querying that table, I now type the returned rows as `books.Selectable[]` instead of just `books[]`:
+
+```typescript
+const existingBooks: books.Selectable[] = /* database query goes here */;
+```
+
+And if I have an object with data that I plan to insert into the `books` table, or that I plan to use to look up a particular book, I can now also have those type-checked and auto-completed in VS Code, like so:
 
 ```typescript
 const newBook: books.Insertable = { 
   authorId: 123,
   title: "One Hundred Years of Solitude",
 };
+
+const bookConditions: books.Whereable = {
+  authorId: 456,
+};
 ```
 
-Similarly, if I'm querying that table, I can define an object to hold the results as follows, and have all subsequent operations with that variable benefit from type-checking and auto-completion:
-
-```typescript
-const existingBooks: books.Selectable[] = /* database query goes here */;
-```
-
-And with that tantalising `/* database query goes here */`, Act 1 draws to a close.
-
-<a name="act2"></a>Act 2: In which we use that type information to improve the ergonomics of writing raw SQL
---
-
-If we stick to plain old [pg](https://node-postgres.com/), the `/* database query` that `goes here */` might work as follows.
-
-First, set up a connection pool:
-
-```typescript
-import * as pg from "pg";
-const pool = new pg.Pool({ /* connection options */ });
-```
-
-Then:
-
-```typescript
-const
-  authorId = 123,
-  result = await pool.query({
-    text: 'SELECT * FROM "books" WHERE "authorId" = $1',
-    values: [authorId],
-  }),
-  existingBooks: books.Selectable[] = result.rows;
-```
-
-It's nice that the results now pop out fully typed, but there are still some annoyances here. Principally, there's nothing to stop me absent-mindedly or fat-fingeredly trying to query from the non-existent tables `"novels"` or `"boks"`, or according to the non-existent columns `"writerId"` or `"authorid"`, or indeed trying to equate my `"authorId"` with a string or date. There's no auto-completion to help me out, and any errors (whether introduced now or by a future schema update) will only become apparent later on, at runtime.
-
-Also, I have to keep track of the order of interpolated parameters, and provide them separately from the query text (that's only `authorId` in this instance, but it can of course get a lot worse). And things are even worse for `INSERT`s, for example, where I need to generate separate, matching-ordered lists of the column names I'm inserting into and their corresponding values.
-
-So how can we improve these ergonomics — without resorting to a clumsy and complex query builder? Enter ES2015 [tagged templates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_templates).
+But how am I going to use these extra types? Enter the [tagged templates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_templates) I mentioned earlier.
 
 Tagged templates are pleasingly flexible. Critically, neither a template's interpolated values nor its return value have to be strings. And TypeScript supports tagged templates fully, applying the tag function's signature to the interpolated values.
 
-So, this is the plan:
+This is useful because:
 
 * I'm going to define a typed tagged template function, `sql`, which we'll use to write queries. 
 * It's going to be generic, so I can tell it which table(s) it targets: e.g. `sql<books.SQL>` ``` `-- database query goes here` ```
 * It's not going to return a string (yet), but an instance of a class I'm going to call `SQLFragment`.
-* Different kinds of interpolated values will be processed in different ways, and they'll be type-checked and even auto-completed appropriately.
-* An important type of supported interpolated value is other `SQLFragment`s.
-* When it comes to making the query, the root `SQLFragment` will be compiled recursively to produce the appropriate `{ text: '', values: [] }` object that can be passed on to pg.
+* Different kinds of interpolated values will be processed in different ways, and they'll be type-checked and auto-completed appropriately.
+* An important kind of interpolated values is other `SQLFragment`s.
+* When it comes to making the query, the root `SQLFragment` will be compiled recursively to produce the appropriate `{ text: '', values: [] }` object that can be passed on to `pg`.
 
 It's still going to be possible to write invalid SQL, of course, but a bunch of simple errors (including most of the errors that could be introduced by future refactorings) will be caught at compile time or earlier.
 
@@ -231,7 +237,7 @@ And to confirm how this is compiled:
   values: [ 123, '7 DAYS' ] }
 ```
 
-This query involves a `Whereable` with a nested `SQLFragment`. I'm also using a symbol I've called `self`, which is compiled to its parent column name. Finally, I'm using a `param` wrapper function that lets me manually insert parameters to be represented as `$1`, `$2` (etc.) and added to the pg query's `values` array.
+You can see the `SQLFragment` nested inside the `Whereable`. You can also see a symbol I've called `self`, which is compiled to its parent column name. Finally, I'm using the `param` wrapper function, which lets me manually insert parameters to be represented as `$1`, `$2` (etc.) and added to the pg query's `values` array.
 
 **`INSERT` and `UPDATE`**
 
@@ -259,9 +265,9 @@ And this gives the expected:
   values: [ 123, 'One Hundred Years of Solitude' ] }
 ```
 
-The `cols` and `vals` functions produce identically-ordered sequences of the object's keys (quoted) and values (safely passed via pg's `values` array) respectively. (Footnote: if you read the code, you'll see that the two functions don't actually produce anything but a wrapper around the object passed to them, as a hint on how they should be compiled later on, but the principle stands).
+The `cols` and `vals` wrapper functions ultimately produce identically-ordered sequences of the object's keys (quoted) and values (safely passed via pg's `values` array) respectively..
 
-This is all being type-checked and auto-completed as I type it:
+And, of course, this is all being type-checked and auto-completed as I type it:
 
 ![Screenshot: column name auto-completion](column-title-auto-complete.png)
 
@@ -329,7 +335,7 @@ Producing:
 }
 ```
 
-Where, of course, everything is appopriately typed.
+In which everything is appropriately typed:
 
 ![Screenshot: column name auto-completion](selectable-auto-complete.png)
 
@@ -406,7 +412,7 @@ With that out of the way, onwards and upwards: `INSERT`s, `UPDATE`s, and (becaus
 
 **`INSERT`**
 
-The `insert` helper has the same sort of table-specific signatures as select, and it turns the `INSERT` query above into this:
+The `insert` helper has the same sort of table-specific signatures as select, and it turns the `INSERT` query we saw earlier into this:
 
 ```typescript
 const savedBook = await insert(pool, "books", { 
@@ -415,9 +421,9 @@ const savedBook = await insert(pool, "books", {
 });
 ```
 
-This produces the exact same query we wrote previously, with the addition of a `RETURNING *` clause at the end, meaning that we get back a `books.Selectable` that includes values for all the columns with defaults, such as the `id` serial.
+This produces the same query we wrote previously, but now with the addition of a `RETURNING *` clause at the end, meaning that we get back a `books.Selectable` that includes values for all the columns with defaults, such as the `id` serial.
 
-We can insert multiple rows in one query: the function is written (and has appropriate type-signatures) such that, if I instead give it an array-valued `books.Insertable[]`, it gives me an array-valued `books.Selectable[]` back:
+In addition, we can insert multiple rows in one query: the function is written (and has appropriate type-signatures) such that, if I instead give it an array-valued `books.Insertable[]`, it gives me an array-valued `books.Selectable[]` back:
 
 ```typescript
 const savedBooks = await insert(pool, "books", [{ 
@@ -444,7 +450,9 @@ const
   );
 ```
 
-We can again use a `SQLFragment` in an `update` for further flexibility — for example, if we needed to atomically increment a count. In a different context —  for a schema that's not shown — I do something like the following:
+We can again use a `SQLFragment` in an `update` for further flexibility — for example, if we needed to atomically increment a count. 
+
+In a different context —  for a schema that's not shown — I do something like the following:
 
 ```typescript
 await update(pool, "emailAuthentication", { 
