@@ -178,5 +178,5 @@ import * as s from "./demo-schema";
     console.log(result);
   })();
   
-  db.pool.end();
+  await db.pool.end();
 })();

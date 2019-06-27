@@ -14,7 +14,7 @@ CREATE TABLE books
 
 
 CREATE TABLE "emailAuthentication" 
-( "email" TEXT NOT NULL
+( "email" TEXT PRIMARY KEY
 , "consecutiveFailedLogins" INTEGER NOT NULL DEFAULT 0
 , "lastFailedLogin" TIMESTAMPTZ
 );
