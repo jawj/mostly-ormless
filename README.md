@@ -488,7 +488,7 @@ We therefore `map` the transaction data in the receipt into an `appleTransaction
 
 ```typescript
 const 
-  newTransactions = [{
+  newTransactions: s.appleTransactions.Insertable[] = [{
     environment: 'PROD',
     originalTransactionId: '123456',
     accountId: 123,

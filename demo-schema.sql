@@ -13,10 +13,10 @@ CREATE TABLE books
 );
 
 
-CREATE TABLE email_authentication 
-( email TEXT NOT NULL
-, consecutiveFailedLogins INTEGER NOT NULL DEFAULT 0
-, lastFailedLogin TIMESTAMPTZ
+CREATE TABLE "emailAuthentication" 
+( "email" TEXT NOT NULL
+, "consecutiveFailedLogins" INTEGER NOT NULL DEFAULT 0
+, "lastFailedLogin" TIMESTAMPTZ
 );
 
 
