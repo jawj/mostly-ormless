@@ -1,25 +1,27 @@
-import * as db from './db';
-import * as s from './demo-schema';
+import * as db from "./db";
+import * as s from "./demo-schema";
 
 (async () => {
 
   await (async () => {
     // setup (uses shortcut functions)
-    await db.truncate(db.pool, ['books', 'authors'], 'CASCADE');
-    await db.insert(db.pool, 'authors', [{
+    await db.truncate(db.pool, ["books", "authors"], "CASCADE");
+
+    await db.insert(db.pool, "authors", [{
       id: 1,
-      name: 'Jane Austen',
+      name: "Jane Austen",
       isLiving: false,
     }, {
       id: 123,
-      name: 'Gabriel Garcia Marquez',
+      name: "Gabriel Garcia Marquez",
       isLiving: false,
-    }]);
-    await db.insert(db.pool, 'books', {
+      }]);
+    
+    await db.insert(db.pool, "books", {
       authorId: 1,
-      title: 'Pride and Prejudice',
+      title: "Pride and Prejudice",
     });
-  });
+  })();
 
   await (async () => {
     // simple query
@@ -65,11 +67,23 @@ import * as s from './demo-schema';
       
       insertedBooks: s.books.Selectable[] = await query.run(db.pool);
     
-    console.log(insertedBooks)
+    console.log(insertedBooks);
   })();
 
   await (async () => {
+    // inner join
+    type bookAuthorSQL = s.books.SQL | s.authors.SQL | "author";
+    type bookAuthorSelectable = s.books.Selectable & { author: s.authors.Selectable };
 
+    const
+      query = db.sql<bookAuthorSQL>`
+        SELECT ${"books"}.*, to_jsonb(${"authors"}.*) as ${"author"}
+        FROM ${"books"} JOIN ${"authors"} 
+          ON ${"books"}.${"authorId"} = ${"authors"}.${"id"}`,
+
+      bookAuthors: bookAuthorSelectable[] = await query.run(db.pool);
+    
+    console.log(bookAuthors);
   })();
   
   await (async () => {
