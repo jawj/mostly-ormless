@@ -1,4 +1,3 @@
-
 import * as pg from 'pg';
 import { isDatabaseError } from './pgErrors';
 

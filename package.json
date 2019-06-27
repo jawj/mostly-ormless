@@ -1,7 +1,7 @@
 {
   "name": "mostly-ormless",
   "version": "1.0.0",
-  "description": "Mostly ORMless: ergonomic Postgres from TypeScript ==",
+  "description": "Mostly ORMless: ergonomic Postgres from TypeScript",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -18,6 +18,7 @@
   "homepage": "https://github.com/jawj/mostly-ormless#readme",
   "dependencies": {
     "@types/pg": "^7.4.14",
-    "pg": "^7.11.0"
+    "pg": "^7.11.0",
+    "ts-node": "^8.3.0"
   }
 }

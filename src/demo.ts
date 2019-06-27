@@ -1,4 +1,4 @@
-import * as db from "./db";
+import * as db from "./core";
 import * as s from "./demo-schema";
 
 (async () => {

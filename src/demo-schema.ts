@@ -18,7 +18,7 @@ import {
   ColumnValues,
   Queryable,
   UpsertAction,
-} from "./db";
+} from "./core";
 
 export type appleEnvironment = 'PROD' | 'Sandbox';
 export namespace every {
