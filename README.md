@@ -17,8 +17,8 @@ Also, I'm greedy. I want all that, but I want to keep all the type-checking good
 
 In short, I want [cake](https://www.theguardian.com/books/2018/jul/05/word-of-the-week-cake). So I set out to see if I could rustle some up. As it turns out, this was about a week-long project in [three acts](https://en.wikipedia.org/wiki/Three-act_structure):
 
-* _[Act 1](#act1): In which we translate a Postgres schema into TypeScript types._ Spoiler: a project called [schemats](https://github.com/SweetIQ/schemats) will be forked and wrangled here.
-* _[Act 2](#act2): In which we expand that type information and use it to improve the ergonomics of writing raw SQL._ Spoiler: ES2015 [tagged templates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_templates) will play a starring role.
+* _[Act 1](#act1): In which we translate a Postgres schema into TypeScript types._ Spoiler: we'll use a project called [schemats](https://github.com/SweetIQ/schemats) here.
+* _[Act 2](#act2): In which we significantly expand that type information and use it to improve the ergonomics of writing raw SQL._ Spoiler: ES2015 [tagged templates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_templates) will play a starring role.
 * _[Act 3](#act3): In which we create a set of simple shortcut functions on top, which looks a little bit like an ORM but really isn't._ Spoiler: Typescript [function signature overloads](https://www.typescriptlang.org/docs/handbook/functions.html) on concrete string values will be these functions' secret sauce.
 
 
@@ -200,13 +200,13 @@ What's happening here?
 
 Well, first, the table name is now being interpolated, which means it will be type checked and auto-completed. That means: I can pick it from a list; if I get it wrong, I'll be told so immediately; and if I later change its name in the database but forget to change it here, I'll be told so immediately too.
 
-![Screenshot: table type-checking](table-type-check.png)
+![Screenshot: table type-checking](README-resources/table-type-check.png)
 
 So the first kind of interpolated value my `sql` template tag function supports is a plain string. This is type-checked/auto-completed to correspond to a valid table or column name. It will be double-quoted in the generated raw SQL, to protect any idiomatic JavaScript/TypeScript camelCased column names.
 
 And, second, the object I've passed as my where clause is being type-checked/auto-completed as the appropriate `books.Whereable` type. It will be compiled to `("authorId" = $1)`, and its value will be inserted at the appropriate index of the pg query `values` array.
 
-![Screenshot: column auto-completion](column-auto-complete.png)
+![Screenshot: column auto-completion](README-resources/column-auto-complete.png)
 
 So the second kind of interpolated value I can use in a `sql` template is a plain object. This is type-checked/auto-completed as an appropriate `Whereable`, and compiled to a set of `WHERE` conditions connected with `AND`.
 
@@ -217,14 +217,14 @@ Then I can write the following:
 ```typescript
 const
   authorId = 123,
-  period = "7 DAYS",
+  days = 7,
 
   query = sql<books.SQL>`
     SELECT * FROM ${"books"} 
     WHERE ${{
       authorId,
       createdAt: sql<books.SQL>`
-        ${self} > now() - INTERVAL ${param(period)}`,
+        ${self} > now() - ${param(period)} * INTERVAL '1 DAY'`,
     }}`;
 ```
 
@@ -269,7 +269,7 @@ The `cols` and `vals` wrapper functions ultimately produce identically-ordered s
 
 And, of course, this is all being type-checked and auto-completed as I type it:
 
-![Screenshot: column name auto-completion](column-title-auto-complete.png)
+![Screenshot: column name auto-completion](README-resources/column-title-auto-complete.png)
 
 And if, for example, someone renames the `title` column to `name` in future, TypeScript will complain before I even try to run the program.
 
@@ -337,7 +337,7 @@ Producing:
 
 In which everything is appropriately typed:
 
-![Screenshot: column name auto-completion](selectable-auto-complete.png)
+![Screenshot: column name auto-completion](README-resources/selectable-auto-complete.png)
 
 And that marks the end of Act 2. SQL queries are now being auto-completed and type-checked for me, which is excellent. But a lot of the simple stuff still feels a bit boiler-platey and verbose.
 
@@ -367,17 +367,16 @@ const existingBooks = await select(pool, "books", { authorId });
 
 What's really nice here is that, thanks to the schemats-generated function signatures, once I've typed in `"books"` as the second argument to the function, TypeScript and VS Code know how to type-check and auto-complete both the third argument (which, if present, must be a `books.Whereable`) and the return value (which must be a `Promise<books.Selectable[]>`).
 
-![Screenshot: inferred return type](return-type.png)
+![Screenshot: inferred return type](README-resources/return-type.png)
 
 The generated function signatures that make this happen look approximately like so:
 
 ```typescript
 interface SelectSignatures {
-
-  (client: Queryable, table: authors.Table, where?: authors.Whereable, options?: authors.SelectOptions): Promise<authors.Selectable[]>;
-
-  (client: Queryable, table: books.Table, where?: books.Whereable, options?: books.SelectOptions): Promise<books.Selectable[]>;
-
+  (client: Queryable, table: authors.Table, where?: authors.Whereable, options?: authors.SelectOptions): 
+    Promise<authors.Selectable[]>;
+  (client: Queryable, table: books.Table, where?: books.Whereable, options?: books.SelectOptions): 
+    Promise<books.Selectable[]>;
 }
 ```
 
@@ -509,14 +508,14 @@ The last argument to `upsert` is the key or array of keys on which there could b
 In this case, the following query is issued:
 
 ```typescript
-{ text: 'INSERT INTO "appleTransactions"
+{ text: `INSERT INTO "appleTransactions"
     ("accountId", "environment", "latestReceiptData", "originalTransactionId") 
     VALUES ($1, $2, $3, $4), ($5, $6, $7, $8) 
     ON CONFLICT ("environment", "originalTransactionId") DO UPDATE 
     SET ("accountId", "latestReceiptData") = ROW(
       EXCLUDED."accountId", EXCLUDED."latestReceiptData") 
     RETURNING *, 
-      CASE xmax WHEN 0 THEN \'INSERT\' ELSE \'UPDATE\' END AS "$action"',
+      CASE xmax WHEN 0 THEN \'INSERT\' ELSE \'UPDATE\' END AS "$action"`,
   values: [ 
     123, 'PROD', 'TWFuIGlzIGRpc3Rp', '123456',
     234, 'PROD', 'bmd1aXNoZWQsIG5v', '234567' 
