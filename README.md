@@ -204,13 +204,13 @@ Well, first, the table name is now being interpolated, which means it will be ty
 
 So the first kind of interpolated value my `sql` template tag function supports is a plain string. This is type-checked/auto-completed to correspond to a valid table or column name. It will be double-quoted in the generated raw SQL, to protect any idiomatic JavaScript/TypeScript camelCased column names.
 
-And, second, the object I've passed as my where clause is being type-checked/auto-completed as the appropriate `books.Whereable` type. It will be compiled to `("authorId" = $1)`, and its value will be inserted at the appropriate index of the pg query `values` array.
+And, second, the object I've passed as my `WHERE` clause is being type-checked/auto-completed as the appropriate `books.Whereable` type. It will be compiled to `("authorId" = $1)`, and its value will be inserted at the appropriate index of the pg query `values` array.
 
 ![Screenshot: column auto-completion](README-resources/column-auto-complete.png)
 
-So the second kind of interpolated value I can use in a `sql` template is a plain object. This is type-checked/auto-completed as an appropriate `Whereable`, and compiled to a set of `WHERE` conditions connected with `AND`.
+So the second kind of interpolated value I can use in a `sql` template is a plain object. This is type-checked/auto-completed as an appropriate `Whereable`, and compiled to a set of `WHERE` conditions connected with `AND`s.
 
-These `Whereable` objects in fact have more flexibility than I let on before, since they also accept `SQLFragment` values. For example, what if I want to see only books that were added during the last _N_ days? 
+These `Whereable` objects in fact have more flexibility than I let on before, since they also accept `SQLFragment` values. For example, what if I want to see only books for a particular author that were added during the last _N_ days? 
 
 Then I can write the following:
 
@@ -233,11 +233,11 @@ And to confirm how this is compiled:
 ```typescript
 > console.log(query.compile());
 
-{ text: 'SELECT * FROM "books" WHERE ("authorId" = $1 AND ("createdAt" > now() - INTERVAL $2))',
+{ text: 'SELECT * FROM "books" WHERE ("authorId" = $1 AND ("createdAt" > now() - $2 * INTERVAL \'1 DAY\'))',
   values: [ 123, '7 DAYS' ] }
 ```
 
-You can see the `SQLFragment` nested inside the `Whereable`. You can also see a symbol I've called `self`, which is compiled to its parent column name. Finally, I'm using the `param` wrapper function, which lets me manually insert parameters to be represented as `$1`, `$2` (etc.) and added to the pg query's `values` array.
+You can see the `SQLFragment` nested inside the `Whereable`. You can also see a symbol I've called `self`, which is compiled to its parent column name. Finally, I'm using my `param` wrapper function, which lets me manually insert parameters to be represented as `$1`, `$2` (etc.) and added to the pg query's `values` array.
 
 **`INSERT` and `UPDATE`**
 
@@ -500,7 +500,7 @@ const
     latestReceiptData: "bmd1aXNoZWQsIG5v",
   }],
   result = await upsert(pool, "appleTransactions", newTransactions, 
-                        ["environment", "originalTransactionId"]);
+    ["environment", "originalTransactionId"]);
 ```
 
 The last argument to `upsert` is the key or array of keys on which there could be a conflict. 
@@ -522,12 +522,12 @@ In this case, the following query is issued:
   ] }
 ```
 
-The (awaited) return value is an `appleTransactions.UpsertReturnable[]`. An `UpsertReturnable` is just like a `Selectable` but with one extra property, `$action: "INSERT" | "UPDATE"`, valued according to what in fact happened. This is modelled on a similar approach in MS SQL Server. 
+The (awaited) return value is an `appleTransactions.UpsertReturnable[]`. An `UpsertReturnable` is just like a `Selectable` but with one extra property, `$action: "INSERT" | "UPDATE"`, valued according to what in fact happened. This is modelled on [a similar approach in MS SQL Server](https://www.mssqltips.com/sqlservertip/1704/using-merge-in-sql-server-to-insert-update-and-delete-at-the-same-time/). 
 
 The `result` of the above query might therefore be:
 
 ```typescript
-> console.log(result)
+> console.log(result);
 
 [{
   "environment": "PROD",
@@ -544,7 +544,7 @@ The `result` of the above query might therefore be:
 }]
 ```
 
-Epilogue: Transactions
+Encore: Transactions
 --
 
 The 'transactions' we just saw were data about people giving us money, but — for added confusion — let's talk for a moment about _database_ transactions (as in: `BEGIN TRANSACTION` and `COMMIT TRANSACTION`).
