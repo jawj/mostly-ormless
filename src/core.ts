@@ -17,7 +17,7 @@ import {
 } from './schema';
 
 const config = {  // in use, you'll probably import this from somewhere
-    dbURL: 'postgresql://localhost/ormless_demo',
+    dbURL: 'postgresql://localhost/mostly_ormless',
     dbTransactionAttempts: 5,
     dbTransactionRetryDelayRange: [25, 125],
     verbose: true,

@@ -565,11 +565,40 @@ const result = transaction(Isolation.Serializable, async txnClient => {
 
 In addition, it provides a set of hierarchical isolation types, so that you can declare a function as requiring a particular isolation level _or above_. Type-checking will then allow you to pass a client associated with any appropriate level. For example, if you type the `txnClient` argument to your function as `TxnSatisfying.RepeatableRead`, you can call it with `Isolation.Serializable` or `Isolation.RepeatableRead`, but not `Isolation.ReadCommitted`.
 
+Try it out
+--
+
+Everything you need to give this approach a spin is included in this repo. Make sure you have node, npm and Postgres installed, then:
+
+```sh
+cd /some/appropriate/path
+git clone https://github.com/jawj/mostly-ormless.git
+
+cd mostly-ormless
+npm install
+
+createdb mostly_ormless
+psql -d mostly_ormless < src/schema.sql
+```
+
+Then:
+
+```sh
+npx ts-node src/demo.ts  # runs all the examples in this README
+```
+
+Once you've got `demo.ts` running successfully, you can play around with your own queries in there. 
+
+You can also modify the database schema, of course. Whenever you change the schema in Postgres, regenerate `src/schema.ts` by running (as one long line):
+
+```sh
+npx ts-node -O '{ "strict": false }' -I '/node_modules/(?!schemats/)' node_modules/schemats/bin/schemats generate -c postgres://localhost/mostly_ormless -o src/schema.ts 
+```
 
 Where next?
 --
 
-If you think this approach could be useful in your project, feel free to adopt or adapt it. I'd be interested to hear how you get on. I could of course create an npm library for all this, but I wonder if really it's better if you just take the code (it's under 400 lines), understand it, and make it your own.
+If you think this approach could be useful in your own projects, feel free to adopt/adapt it. I'd be interested to hear how you get on. I could of course create an npm library for all this, but I think it's truer to the ORMless spirit if you just take the code (`core.ts` is less than 400 lines), understand it, and make it your own.
 
 <!--
 TypeORM troubles
