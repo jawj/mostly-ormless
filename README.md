@@ -157,7 +157,7 @@ If I'm querying that table, I now type the returned rows as `books.Selectable[]`
 const existingBooks: books.Selectable[] = /* database query goes here */;
 ```
 
-And if I have an object with data that I plan to insert into the `books` table, or that I plan to use to look up a particular book, I can now also have those type-checked and auto-completed in VS Code, like so:
+And if I have an object with data that I plan to insert into the `books` table, or that I plan to use to look up a particular book, I can now also have that type-checked and auto-completed in VS Code, like so:
 
 ```typescript
 const newBook: books.Insertable = { 
@@ -302,7 +302,7 @@ export type GenericSQLExpression = SQLFragment | Parameter | DefaultType | Dange
 
 **`JOIN`s**
 
-We can of course use all of these types to help us in more complicated queries too. Take this common-or-garden `INNER JOIN`, for example:
+We can of course use all of these types to help us in more complicated queries too. Take this `INNER JOIN`, for example, where we use Postgres's excellent JSON support to produce a sensibly-structured return value and avoid column name clashes:
 
 ```typescript
 type bookAuthorSQL = books.SQL | authors.SQL | "author";

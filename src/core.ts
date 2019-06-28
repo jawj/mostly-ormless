@@ -14,17 +14,17 @@ import {
   Table,
   Column,
   UpsertSignatures,
-} from './demo-schema';
+} from './schema';
 
-export const pool = new pg.Pool({ connectionString: 'postgresql://localhost/ormless_demo' });
-
-const
-  config = {
+const config = {  // in use, you'll probably import this from somewhere
+    dbURL: 'postgresql://localhost/ormless_demo',
     dbTransactionAttempts: 5,
-    dbTransactionRetryDelayRange: [25, 250],
+    dbTransactionRetryDelayRange: [25, 125],
     verbose: true,
-  },
-  wait = (delayMs: number) => new Promise(resolve => setTimeout(resolve, delayMs));
+};
+  
+export const pool = new pg.Pool({ connectionString: config.dbURL });
+
 
 // === symbols, types, wrapper classes and shortcuts ===
 
@@ -405,6 +405,8 @@ export class SQLFragment {
 }
 
 // === supporting functions ===
+
+const wait = (delayMs: number) => new Promise(resolve => setTimeout(resolve, delayMs));
 
 const mapWithSeparator = <TIn, TSep, TOut>(
   arr: TIn[],

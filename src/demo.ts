@@ -1,5 +1,5 @@
 import * as db from "./core";
-import * as s from "./demo-schema";
+import * as s from "./schema";
 
 (async () => {
 
@@ -24,14 +24,20 @@ import * as s from "./demo-schema";
       }
     ]);
     
-    await db.insert(db.pool, "books", {
-      authorId: 1,
-      title: "Pride and Prejudice",
-    });
+    await db.insert(db.pool, "books", [
+      {
+        authorId: 1,
+        title: "Pride and Prejudice",
+      }, {
+        authorId: 123,
+        title: "Love in the Time of Cholera"
+      }
+    ]);
   })();
 
   await (async () => {
-    // simple query
+    console.log('\n=== Simple manual SELECT ===\n');
+
     const
       authorId = 1,
       query = db.sql<s.books.SQL>`
@@ -43,7 +49,8 @@ import * as s from "./demo-schema";
   })();
 
   await (async () => {
-    // Whereable with a nested SQLFragment
+    console.log('\n=== SELECT with a SQLFragment in a Whereable ===\n');
+    
     const
       authorId = 1,
       days = 7,
@@ -61,7 +68,8 @@ import * as s from "./demo-schema";
   })();
 
   await (async () => {
-    // simple insert
+    console.log('\n=== Simple manual INSERT ===\n');
+
     const
       newBook: s.books.Insertable = {
         authorId: 123,
@@ -77,7 +85,8 @@ import * as s from "./demo-schema";
   })();
 
   await (async () => {
-    // inner join
+    console.log('\n=== Inner join ===\n');
+
     type bookAuthorSQL = s.books.SQL | s.authors.SQL | "author";
     type bookAuthorSelectable = s.books.Selectable & { author: s.authors.Selectable };
 
@@ -93,6 +102,8 @@ import * as s from "./demo-schema";
   })();
   
   await (async () => {
+    console.log('\n=== Shortcut functions ===\n');
+
     const
       authorId = 123,
       existingBooks = await db.select(db.pool, "books", { authorId });
@@ -128,6 +139,8 @@ import * as s from "./demo-schema";
   })();
 
   await (async () => {
+    console.log('\n=== Shortcut UPDATE with a SQLFragment in an Updatable ===\n');
+
     const email = "me@privacy.net";
 
     await db.insert(db.pool, "emailAuthentication", { email });
@@ -139,6 +152,8 @@ import * as s from "./demo-schema";
   })();
 
   await (async () => {
+    console.log('\n=== Shortcut UPSERT ===\n');
+
     await db.insert(db.pool, "appleTransactions", {
       environment: 'PROD',
       originalTransactionId: '123456',
@@ -146,7 +161,8 @@ import * as s from "./demo-schema";
       latestReceiptData: "5Ia+DmVgPHh8wigA",
     });
 
-    const newTransactions: s.appleTransactions.Insertable[] = [{
+    const
+      newTransactions: s.appleTransactions.Insertable[] = [{
         environment: 'PROD',
         originalTransactionId: '123456',
         accountId: 123,
@@ -159,16 +175,22 @@ import * as s from "./demo-schema";
       }],
       result = await db.upsert(db.pool, "appleTransactions", newTransactions,
         ["environment", "originalTransactionId"]);
-    
+
     console.log(result);
   })();
 
   await (async () => {
+    console.log('\n=== Transaction ===\n');
     const
       email = "me@privacy.net",
       result = await db.transaction(db.Isolation.Serializable, async txnClient => {
+
         const emailAuth = await db.selectOne(txnClient, "emailAuthentication", { email });
-        // do stuff with email record -- e.g. check a password
+        
+        // do stuff with email record -- e.g. check a password, handle successful login --
+        // but remember everything non-DB-related in this function must be idempotent
+        // since it might be called several times if there are serialization failures
+        
         return db.update(txnClient, "emailAuthentication", {
           consecutiveFailedLogins: db.sql`${db.self} + 1`,
           lastFailedLogin: db.sql`now()`,
