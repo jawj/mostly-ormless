@@ -407,7 +407,7 @@ Well, I don't think so. This is not an ORM. There's no weird magic going on behi
 
 It's also not a query builder. There's no interminable method chaining. There's just type-checking and some additional conveniences applied to writing raw SQL queries, and some shortcut functions that can create basic SQL queries on your behalf. 
 
-With that out of the way, onwards and upwards: `INSERT`s, `UPDATE`s, and (because, hey, now we can do anything Postgres can do now) [UPSERT](https://wiki.postgresql.org/wiki/UPSERT)s!
+With that out of the way, onwards and upwards: `INSERT`s, `UPDATE`s, and (because, hey, now we can do anything Postgres can do) [UPSERT](https://wiki.postgresql.org/wiki/UPSERT)s!
 
 **`INSERT`**
 
