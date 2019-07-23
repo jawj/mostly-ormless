@@ -407,7 +407,7 @@ Well, I don't think so. This is not an ORM. There's no weird magic going on behi
 
 It's also not a query builder. There's no interminable method chaining. There's just type-checking and some additional conveniences applied to writing raw SQL queries, and some shortcut functions that can create basic SQL queries on your behalf. 
 
-With that out of the way, onwards and upwards: `INSERT`s, `UPDATE`s, and (because, hey, now we can do anything Postgres can do now) [UPSERT](https://wiki.postgresql.org/wiki/UPSERT)s!
+With that out of the way, onwards and upwards: `INSERT`s, `UPDATE`s, and (because, hey, now we can do anything Postgres can do) [UPSERT](https://wiki.postgresql.org/wiki/UPSERT)s!
 
 **`INSERT`**
 
@@ -422,7 +422,7 @@ const savedBook = await insert(pool, "books", {
 
 This produces the same query we wrote previously, but now with the addition of a `RETURNING *` clause at the end, meaning that we get back a `books.Selectable` that includes values for all the columns with defaults, such as the `id` serial.
 
-In addition, we can insert multiple rows in one query: the function is written (and has appropriate type-signatures) such that, if I instead give it an array-valued `books.Insertable[]`, it gives me an array-valued `books.Selectable[]` back:
+In addition, we can insert multiple rows in one query: the function is written (and has appropriate type signatures) such that, if I instead give it an array-valued `books.Insertable[]`, it gives me an array-valued `books.Selectable[]` back:
 
 ```typescript
 const savedBooks = await insert(pool, "books", [{ 
@@ -512,10 +512,10 @@ In this case, the following query is issued:
     ("accountId", "environment", "latestReceiptData", "originalTransactionId") 
     VALUES ($1, $2, $3, $4), ($5, $6, $7, $8) 
     ON CONFLICT ("environment", "originalTransactionId") DO UPDATE 
-    SET ("accountId", "latestReceiptData") = ROW(
-      EXCLUDED."accountId", EXCLUDED."latestReceiptData") 
+    SET ("accountId", "latestReceiptData") = 
+      ROW(EXCLUDED."accountId", EXCLUDED."latestReceiptData") 
     RETURNING *, 
-      CASE xmax WHEN 0 THEN \'INSERT\' ELSE \'UPDATE\' END AS "$action"`,
+      CASE xmax WHEN 0 THEN 'INSERT' ELSE 'UPDATE' END AS "$action"`,
   values: [ 
     123, 'PROD', 'TWFuIGlzIGRpc3Rp', '123456',
     234, 'PROD', 'bmd1aXNoZWQsIG5v', '234567' 
