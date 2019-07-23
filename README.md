@@ -21,6 +21,7 @@ In short, I want [cake](https://www.theguardian.com/books/2018/jul/05/word-of-th
 * _[Act 2](#act2): In which we significantly expand that type information and use it to improve the ergonomics of writing raw SQL._ Spoiler: ES2015 [tagged templates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_templates) will play a starring role.
 * _[Act 3](#act3): In which we create a set of simple shortcut functions on top, which looks a little bit like an ORM but really isn't._ Spoiler: Typescript [function signature overloads](https://www.typescriptlang.org/docs/handbook/functions.html) on concrete string values will be these functions' secret sauce.
 
+(There is a also a brief [encore](#encore) in which I discuss transactions).
 
 <a name="act1"></a>Act 1: In which we translate a Postgres schema into TypeScript types
 --
@@ -544,7 +545,7 @@ The `result` of the above query might therefore be:
 }]
 ```
 
-Encore: Transactions
+<a name="encore"></a>Encore: Transactions
 --
 
 The 'transactions' we just saw were data about people giving us money, but — for added confusion — let's talk for a moment about _database_ transactions (as in: `BEGIN TRANSACTION` and `COMMIT TRANSACTION`).
@@ -587,12 +588,22 @@ Then:
 npx ts-node src/demo.ts  # runs all the examples in this README
 ```
 
-Once you've got `demo.ts` running successfully, you can play around with your own queries in there. 
+Once you've got `demo.ts` running successfully, you can play around with your own queries in there.
 
-You can also modify the database schema, of course. Whenever you change the schema in Postgres, regenerate `src/schema.ts` by running (as one long line):
+You can also modify the database schema, of course. For this, you'll need my schemats fork, so in the root of this project run:
 
 ```sh
-npx ts-node -O '{ "strict": false }' -I '/node_modules/(?!schemats/)' node_modules/schemats/bin/schemats generate -c postgres://localhost/mostly_ormless -o src/schema.ts 
+npm submodule init
+npm submodule update
+cd schemats
+npm install
+cd ..
+```
+
+Then, whenever you change the schema in Postgres, regenerate `src/schema.ts` by running (as one long line):
+
+```sh
+npx ts-node schemats/bin/schemats.ts generate -c postgres://localhost/mostly_ormless -o src/schema.ts 
 ```
 
 Where next?
