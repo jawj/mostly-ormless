@@ -54,13 +54,7 @@ CREATE TABLE books
 );
 ```
 
-If we run vanilla schemats against this:
-
-```
-bin/schemats.js generate -c postgres://postgres@localhost/ormless -o ormless.ts
-```
-
-We get the following TypeScript definitions for the `books` table:
+If we run vanilla schemats against this, we get the following TypeScript definitions for the `books` table:
 
 ```typescript
 export namespace booksFields {
@@ -111,16 +105,16 @@ So, here's the plan. I'm going to come up with some ES2015 [tagged templates](ht
 <a name="act2"></a>Act 2: In which we expand that type information and use it to improve the ergonomics of writing raw SQL
 --
 
-Specifically, I want the type information about my database tables to specify not just what I'll get back from a `SELECT` query, but also what I'm allowed to use in a `WHERE` condition, and what I can `INSERT` and `UPDATE` too.
+I said I wanted more complete type information about my tables. Specifically, I want the types I generate to specify not just what I'll get back from a `SELECT` query, but also what I'm allowed to use in a `WHERE` condition, and what I can `INSERT` and `UPDATE` too.
 
-These are the four main interfaces I'm going to define:
+So these are the four main interfaces I'm going to define:
 
 * **`Selectable`**: what I'll get back from a `SELECT` query. This is what schemats was already giving us.
 * **`Whereable`**: what I can use in a `WHERE` condition. This is approximately the same as `Selectable`, but all columns are optional. It is (subject to some later tweaks) a `Partial<Selectable>`.
 * **`Insertable`**: what I can `INSERT` into a table. This is also similar to `Selectable`, but any fields that are `NULL`able and/or have `DEFAULT` values are allowed to be missing, `NULL` or `DEFAULT`.
 * **`Updatable`**: what I can `UPDATE` a row with. This is similar to what I can `INSERT`, but all columns are optional: it is a simple `Partial<Insertable>`.
 
-I [forked schemats](https://github.com/PSYT/schemats) to generate these interfaces. While I was at it I also got rid of the verbose, original, two-stage approach, where a type alias was created for every column.
+I [forked schemats](https://github.com/PSYT/schemats) to generate these interfaces. While I was at it I also got rid of the verbose, original, two-stage approach, where a type alias is created for every column.
 
 Ignoring a few additional bells and whistles, my schemats fork therefore now generates something like the following when run against the `books` table:
 
@@ -609,7 +603,7 @@ npx ts-node schemats/bin/schemats.ts generate -c postgres://localhost/mostly_orm
 Where next?
 --
 
-If you think this approach could be useful in your own projects, feel free to adopt/adapt it. I'd be interested to hear how you get on. I could of course create an npm library for all this, but I think it's truer to the ORMless spirit if you just take the code (`core.ts` is less than 400 lines), understand it, and make it your own.
+If you think this approach could be useful in your own projects, feel free to adopt/adapt it. I'd be interested to hear how you get on. I could of course create an npm library for all this, but I think it's much more truly ORMless if you just take the code (`core.ts` is less than 400 lines), understand it, and make it your own.
 
 <!--
 TypeORM troubles
