@@ -260,7 +260,7 @@ And this gives the expected:
   values: [ 123, 'One Hundred Years of Solitude' ] }
 ```
 
-The `cols` and `vals` wrapper functions ultimately produce identically-ordered sequences of the object's keys (quoted) and values (safely passed via pg's `values` array) respectively..
+The `cols` and `vals` wrapper functions ultimately produce identically-ordered sequences of the object's keys (quoted) and values (safely passed via pg's `values` array) respectively.
 
 And, of course, this is all being type-checked and auto-completed as I type it:
 
