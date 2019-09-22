@@ -229,7 +229,7 @@ And to confirm how this is compiled:
 > console.log(query.compile());
 
 { text: 'SELECT * FROM "books" WHERE ("authorId" = $1 AND ("createdAt" > now() - $2 * INTERVAL \'1 DAY\'))',
-  values: [ 123, '7 DAYS' ] }
+  values: [ 123, 7 ] }
 ```
 
 You can see the `SQLFragment` nested inside the `Whereable`. You can also see a symbol I've called `self`, which is compiled to its parent column name. Finally, I'm using my `param` wrapper function, which lets me manually insert parameters to be represented as `$1`, `$2` (etc.) and added to the pg query's `values` array.
@@ -260,7 +260,7 @@ And this gives the expected:
   values: [ 123, 'One Hundred Years of Solitude' ] }
 ```
 
-The `cols` and `vals` wrapper functions ultimately produce identically-ordered sequences of the object's keys (quoted) and values (safely passed via pg's `values` array) respectively..
+The `cols` and `vals` wrapper functions ultimately produce identically-ordered sequences of the object's keys (quoted) and values (safely passed via pg's `values` array) respectively.
 
 And, of course, this is all being type-checked and auto-completed as I type it:
 
