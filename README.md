@@ -297,7 +297,7 @@ export type GenericSQLExpression = SQLFragment | Parameter | DefaultType | Dange
 
 **`JOIN`s**
 
-We can of course use all of these types to help us in more complicated queries too. Take this `INNER JOIN`, for example, where we use Postgres's excellent JSON support to produce a sensibly-structured return value and avoid column name clashes:
+We can of course use all of these types to help us in more complicated queries too. Take this `JOIN`, for example, retrieving each book with its (single) author. We can use Postgres's excellent JSON support to produce a sensibly-structured return value and avoid column name clashes:
 
 ```typescript
 type bookAuthorSQL = books.SQL | authors.SQL | "author";
@@ -333,6 +333,47 @@ Producing:
 In which everything is appropriately typed:
 
 ![Screenshot: column name auto-completion](README-resources/selectable-auto-complete.png)
+
+Of course, we might also want the converse query, retrieving each author with their (many) books. This is also easy enough to arrange:
+
+```typescript
+type authorBooksSQL = authors.SQL | books.SQL;
+type authorBooksSelectable = authors.Selectable & { books: books.Selectable };
+
+const
+  query = sql<authorBooksSQL>`
+    SELECT ${"authors"}.*, jsonb_agg(${"books"}.*) AS ${"books"}
+    FROM ${"authors"} JOIN ${"books"} 
+      ON ${"authors"}.${"id"} = ${"books"}.${"authorId"}
+    GROUP BY ${"authors"}.${"id"}`,
+
+  authorBooks: authorBooksSelectable[] = await query.run(pool);
+```
+
+Which gives:
+
+```typescript
+> console.dir(authorBooks[0]);
+
+[ { id: 123,
+    name: 'Gabriel Garcia Marquez',
+    isLiving: false,
+    books:
+     [ { id: 139,
+         title: 'Love in the Time of Cholera',
+         authorId: 123,
+         createdAt: '2019-09-22T19:49:32.373132+01:00',
+         updatedAt: '2019-09-22T19:49:32.373132+01:00' },
+       { id: 140,
+         title: 'One Hundred Years of Solitude',
+         authorId: 123,
+         createdAt: '2019-09-22T19:49:32.380854+01:00',
+         updatedAt: '2019-09-22T19:49:32.380854+01:00' } ] } ]
+```
+
+(Incidentally, I learned something useful here: selecting all fields in a `GROUP BY` query *is* [permitted if you're grouping by primary key](https://dba.stackexchange.com/questions/158015/why-can-i-sel)).
+
+Note that if you wanted to include authors with no books, you'd need a `LEFT JOIN` in this query, and you'd also need to use a `COALESCE` and `FILTER` to fix the annoying [`[null]` array results returned by `jsonb_agg` for those authors](https://stackoverflow.com/questions/24155190/postgresql-left-join-json-agg-ignore-remove-null).
 
 And that marks the end of Act 2. SQL queries are now being auto-completed and type-checked for me, which is excellent. But a lot of the simple stuff still feels a bit boiler-platey and verbose.
 
@@ -604,20 +645,3 @@ Where next?
 --
 
 If you think this approach could be useful in your own projects, feel free to adopt/adapt it. I'd be interested to hear how you get on. I could of course create an npm library for all this, but I think it's much more truly ORMless if you just take the code (`core.ts` is less than 400 lines), understand it, and make it your own.
-
-<!--
-TypeORM troubles
-
-PSYT has a simple data API built on node.js and a Postgres database. We recently decided to move this from CoffeeScript to TypeScript, as the first step in some refactoring and extending. We had been using the Sequelize ORM to talk to the database, but this doesn't play too nicely with TypeScript, so we also took the opportunity to migrate to TypeORM.
-
-TypeORM looked brilliant, initially ... but we soon came to the conclusion that it's written by people who really get TypeScript, but perhaps don't really get SQL. These were our key issues:
-
-* Underlying database semantics are changed in ways that are sometimes surprising and usually inefficient.
-* There are several different ways to do almost everything, but these still don't cover the full range of things you probably want to do.
-* Transaction support is clumsy and error-prone. 
-
-As you probably know, most of these criticisms apply to most ORMs. Many of them result from supporting multiple database back-ends. But in TypeORM they seemed particularly acute, to the extent that they began to feel like a real liability. 
-
-So we began to think: how would we ideally like to be talking to Postgres? And can we make that happen?
-
--->
