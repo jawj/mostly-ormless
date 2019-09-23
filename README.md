@@ -395,15 +395,17 @@ const query = sql<authorBooksSQL>`
 
 **Field subsets**
 
-Unless you have very wide tables and/or very large values, it might be a [premature optimization](https://softwareengineering.stackexchange.com/questions/80084/is-premature-optimization-really-the-root-of-all-evil) to query only for a subset of fields. If you do need to limit your queries to particular fields, you might find TypeScript's [mapped and conditional types](https://www.typescriptlang.org/docs/handbook/advanced-types.html) useful, but doing it properly can be quite fiddly:
+Unless you have very wide tables and/or very large values, it might be a [premature optimization](https://softwareengineering.stackexchange.com/questions/80084/is-premature-optimization-really-the-root-of-all-evil) to query only for a subset of fields. If you do need to limit your queries to particular fields, you might find TypeScript's [mapped and conditional types](https://www.typescriptlang.org/docs/handbook/advanced-types.html) useful.
+
+In this example we create a custom type for the selected data, and also for the SQL query. That latter type (`bookDatumSQL`) is kind of fiddly, and quite frankly it's probably better to stick to `books.SQL`, since you might anyway want to use other column names from the table — in a `WHERE` clause, for example.
 
 ```typescript
 type bookDatum = Pick<books.Selectable, 'id' | 'title'>;
-type bookDatumSQL = Exclude<books.SQL, Exclude<keyof books.Selectable, keyof bookDatum>>;
+type bookDatumSQL = Exclude<books.SQL, Exclude<keyof books.Selectable, keyof bookDatum>>;  // but maybe don't bother with this one
 
 const
-  query = db.sql<bookDatumSQL>`SELECT ${"id"}, ${"title"} FROM ${"books"}`,
-  bookData: bookDatum[] = await query.run(db.pool);
+  query = sql<bookDatumSQL>`SELECT ${"id"}, ${"title"} FROM ${"books"}`,
+  bookData: bookDatum[] = await query.run(pool);
 ```
 
 Giving:
