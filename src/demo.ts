@@ -103,13 +103,13 @@ import * as s from "./schema";
 
   await (async () => {
     console.log('\n=== One-to-many join (each author with their many books) ===\n');
-    
+
     // selecting all fields is, logically enough, permitted when grouping by primary key;
     // see: https://www.postgresql.org/docs/current/sql-select.html#SQL-GROUPBY and
     // https://dba.stackexchange.com/questions/158015/why-can-i-select-all-fields-when-grouping-by-primary-key-but-not-when-grouping-b
 
     type authorBooksSQL = s.authors.SQL | s.books.SQL;
-    type authorBooksSelectable = s.authors.Selectable & { books: s.books.Selectable };
+    type authorBooksSelectable = s.authors.Selectable & { books: s.books.Selectable[] };
 
     const
       query = db.sql<authorBooksSQL>`
@@ -121,6 +121,19 @@ import * as s from "./schema";
       authorBooks: authorBooksSelectable[] = await query.run(db.pool);
 
     console.dir(authorBooks, { depth: null });
+  })();
+
+  await (async () => {
+    console.log('\n=== Querying a subset of fields ===\n');
+
+    type bookDatum = Pick<s.books.Selectable, 'id' | 'title'>;
+    type bookDatumSQL = Exclude<s.books.SQL, Exclude<keyof s.books.Selectable, keyof bookDatum>>;
+
+    const
+      query = db.sql<bookDatumSQL>`SELECT ${"id"}, ${"title"} FROM ${"books"}`,
+      bookData: bookDatum[] = await query.run(db.pool);
+
+    console.log(bookData);
   })();
   
   await (async () => {

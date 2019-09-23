@@ -338,7 +338,7 @@ Of course, we might also want the converse query, retrieving each author with th
 
 ```typescript
 type authorBooksSQL = authors.SQL | books.SQL;
-type authorBooksSelectable = authors.Selectable & { books: books.Selectable };
+type authorBooksSelectable = authors.Selectable & { books: books.Selectable[] };
 
 const
   query = sql<authorBooksSQL>`
@@ -371,9 +371,50 @@ Which gives:
          updatedAt: '2019-09-22T19:49:32.380854+01:00' } ] } ]
 ```
 
-(Incidentally, I learned something useful here: selecting all fields in a `GROUP BY` query *is* [permitted if you're grouping by primary key](https://dba.stackexchange.com/questions/158015/why-can-i-sel)).
+(It also demonstrates a useful SQL fact: selecting all fields in a `GROUP BY` query is [permitted as long as you're grouping by primary key](https://dba.stackexchange.com/questions/158015/why-can-i-sel)).
 
-Note that if you wanted to include authors with no books, you'd need a `LEFT JOIN` in this query, and you'd also need to use a `COALESCE` and `FILTER` to fix the annoying [`[null]` array results returned by `jsonb_agg` for those authors](https://stackoverflow.com/questions/24155190/postgresql-left-join-json-agg-ignore-remove-null).
+Note that if you want to include authors with no books, you need a `LEFT JOIN` in this query, and then you'll want to fix the annoying [`[null]` array results `jsonb_agg` will return for those authors](https://stackoverflow.com/questions/24155190/postgresql-left-join-json-agg-ignore-remove-null).
+
+One way to do that is to define a simple function to replace `[null]` with the empty array `[]`:
+
+```sql
+CREATE OR REPLACE FUNCTION empty_nulls(jsonb) RETURNS jsonb AS $$
+  SELECT CASE $1 WHEN '[null]'::jsonb THEN '[]'::jsonb ELSE $1 END
+$$ LANGUAGE SQL IMMUTABLE;
+```
+
+And wrap it around the `jsonb_agg` call:
+
+```typescript
+const query = sql<authorBooksSQL>`
+  SELECT ${"authors"}.*, empty_nulls(jsonb_agg(${"books"}.*)) AS ${"books"}
+  FROM ${"authors"} LEFT JOIN ${"books"} 
+    ON ${"authors"}.${"id"} = ${"books"}.${"authorId"}
+  GROUP BY ${"authors"}.${"id"}`;
+```
+
+**Field subsets**
+
+Unless you have very wide tables and/or very large values, it might be a [premature optimization](https://softwareengineering.stackexchange.com/questions/80084/is-premature-optimization-really-the-root-of-all-evil) to query only for a subset of fields. If you do need to limit your queries to particular fields, you might find TypeScript's [mapped and conditional types](https://www.typescriptlang.org/docs/handbook/advanced-types.html) useful, but doing it properly can be quite fiddly:
+
+```typescript
+type bookDatum = Pick<books.Selectable, 'id' | 'title'>;
+type bookDatumSQL = Exclude<books.SQL, Exclude<keyof books.Selectable, keyof bookDatum>>;
+
+const
+  query = db.sql<bookDatumSQL>`SELECT ${"id"}, ${"title"} FROM ${"books"}`,
+  bookData: bookDatum[] = await query.run(db.pool);
+```
+
+Giving:
+
+```typescript
+> console.log(bookData);
+
+[ { id: 153, title: 'Pride and Prejudice' },
+  { id: 154, title: 'Love in the Time of Cholera' },
+  { id: 155, title: 'One Hundred Years of Solitude' } ]
+```
 
 And that marks the end of Act 2. SQL queries are now being auto-completed and type-checked for me, which is excellent. But a lot of the simple stuff still feels a bit boiler-platey and verbose.
 
