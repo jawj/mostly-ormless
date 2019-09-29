@@ -54,7 +54,7 @@ export function vals<T>(x: T) { return new ColumnValues<T>(x); }
 
 
 export type GenericSQLExpression = SQLFragment | Parameter | DefaultType | DangerousRawString | SelfType;
-export type SQLExpression = Table | ColumnNames<Updatable> | ColumnValues<Updatable> | Whereable | Column | GenericSQLExpression;
+export type SQLExpression = Table | ColumnNames<Updatable | (keyof Updatable)[]> | ColumnValues<Updatable> | Whereable | Column | GenericSQLExpression;
 export type SQL = SQLExpression | SQLExpression[];
 
 
@@ -352,7 +352,9 @@ export class SQLFragment {
 
     } else if (expression instanceof ColumnNames) {
       // a ColumnNames-wrapped object -> quoted names in a repeatable order
-      const columnNames = Object.keys(expression.value).sort();
+      // or: a ColumnNames-wrapped array
+      const columnNames = Array.isArray(expression.value) ? expression.value :
+        Object.keys(expression.value).sort();
       result.text += columnNames.map(k => `"${k}"`).join(', ');
 
     } else if (expression instanceof ColumnValues) {

@@ -113,8 +113,8 @@ import * as s from "./schema";
 
     const
       query = db.sql<authorBooksSQL>`
-        SELECT ${"authors"}.*, jsonb_agg(${"books"}.*) AS ${"books"}
-        FROM ${"authors"} JOIN ${"books"} 
+        SELECT ${"authors"}.*, coalesce(json_agg(${"books"}.*) filter (where ${"books"}.* is not null), '[]') AS ${"books"}
+        FROM ${"authors"} LEFT JOIN ${"books"} 
           ON ${"authors"}.${"id"} = ${"books"}.${"authorId"}
         GROUP BY ${"authors"}.${"id"}`,
 
@@ -126,13 +126,13 @@ import * as s from "./schema";
   await (async () => {
     console.log('\n=== Querying a subset of fields ===\n');
 
-    type bookDatum = Pick<s.books.Selectable, 'id' | 'title'>;
-    type bookDatumSQL = Exclude<s.books.SQL, Exclude<keyof s.books.Selectable, keyof bookDatum>>;
+    const bookCols = <const>['id', 'title'];
+    type BookDetails = s.books.OnlyCols<typeof bookCols>;
 
     const
-      query = db.sql<bookDatumSQL>`SELECT ${"id"}, ${"title"} FROM ${"books"}`,
-      bookData: bookDatum[] = await query.run(db.pool);
-
+      query = db.sql<s.books.SQL>`SELECT ${db.cols(bookCols)} FROM ${"books"}`,
+      bookData: BookDetails[] = await query.run(db.pool);
+    
     console.log(bookData);
   })();
   

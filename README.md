@@ -395,17 +395,19 @@ const query = sql<authorBooksSQL>`
 
 **Field subsets**
 
-Unless you have very wide tables and/or very large values, it might be a [premature optimization](https://softwareengineering.stackexchange.com/questions/80084/is-premature-optimization-really-the-root-of-all-evil) to query only for a subset of fields. If you do need to limit your queries to particular fields, you might find TypeScript's [mapped and conditional types](https://www.typescriptlang.org/docs/handbook/advanced-types.html) useful.
+Unless you have very wide tables and/or very large values, it could be a [premature optimization](https://softwareengineering.stackexchange.com/questions/80084/is-premature-optimization-really-the-root-of-all-evil) to query only for a subset of fields.
 
-In this example we create a custom type for the selected data, and also for the SQL query. That latter type (`bookDatumSQL`) is kind of fiddly, and quite frankly it's probably better to stick to `books.SQL`, since you might anyway want to use other column names from the table — in a `WHERE` clause, for example.
+But if you need it, two conveniences are provided: (1) the `cols` function can take an array of column names, and simply spit them out quoted and comma-separated; and (2) there's a table-specific type helper `OnlyCols` that will narrow `Selectable` down to the columns included in such an array.
+
+For example:
 
 ```typescript
-type bookDatum = Pick<books.Selectable, 'id' | 'title'>;
-type bookDatumSQL = Exclude<books.SQL, Exclude<keyof books.Selectable, keyof bookDatum>>;  // but maybe don't bother with this one
+const bookCols = <const>['id', 'title'];  // <const> prevents generalization to string[]
+type BookDetails = books.OnlyCols<typeof bookCols>;
 
 const
-  query = sql<bookDatumSQL>`SELECT ${"id"}, ${"title"} FROM ${"books"}`,
-  bookData: bookDatum[] = await query.run(pool);
+  query = sql<books.SQL>`SELECT ${cols(bookCols)} FROM ${"books"}`,
+  bookData: BookDetails[] = await query.run(pool);
 ```
 
 Giving:
