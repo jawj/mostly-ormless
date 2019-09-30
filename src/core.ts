@@ -276,13 +276,20 @@ export async function transaction<T, M extends Isolation>(
         // https://www.postgresql.org/message-id/1368066680.60649.YahooMailNeo@web162902.mail.bf1.yahoo.com
         // this is also a good read:
         // https://www.enterprisedb.com/blog/serializable-postgresql-11-and-beyond
-        if (attempt < maxAttempts && isDatabaseError(err,
+        if (isDatabaseError(err,
           "TransactionRollback_SerializationFailure", "TransactionRollback_DeadlockDetected")) {
+          
+          if (attempt < maxAttempts) {
+            const delayBeforeRetry = Math.round(delayMin + (delayMax - delayMin) * Math.random());
+            console.log(`Transaction #${txnId} rollback (code ${err.code}) on attempt ${attempt} of ${maxAttempts}, retrying in ${delayBeforeRetry}ms`);
 
-          const delayBeforeRetry = Math.round(delayMin + (delayMax - delayMin) * Math.random());
-          console.log(`Transaction #${txnId} rollback (code ${err.code}) on attempt ${attempt} of ${maxAttempts}, retrying in ${delayBeforeRetry}ms`);
+            await wait(delayBeforeRetry);
 
-          await wait(delayBeforeRetry);
+          } else {
+            console.log(`Transaction #${txnId} rollback (code ${err.code}) on attempt ${attempt} of ${maxAttempts}, giving up`);
+
+            throw err;
+          }
 
         } else {
           throw err;
