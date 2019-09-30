@@ -166,12 +166,19 @@ interface SelectOptions {
   order?: OrderSpec[];
   limit?: number,
   offset?: number,
+  columns?: Column[],
 }
 
-export const select: SelectSignatures = async function
-  (client: Queryable, table: Table, where: Whereable = {}, options: SelectOptions = {}, count: boolean = false): Promise<any[]> {
+export const select: SelectSignatures = async function (
+  client: Queryable,
+  table: Table,
+  where: Whereable = {},
+  options: SelectOptions = {},
+  count: boolean = false,
+): Promise<any[]> {
 
   const
+    colsSQL = !options.columns ? raw('*') : cols(options.columns),
     whereSQL = Object.keys(where).length > 0 ? [sql` WHERE `, where] : [],
     orderSQL = !options.order ? [] :
       [sql` ORDER BY `, ...mapWithSeparator(options.order, sql`, `, o =>
@@ -180,7 +187,7 @@ export const select: SelectSignatures = async function
     offsetSQL = options.offset === undefined ? [] : sql` OFFSET ${raw(String(options.offset))}`;
 
   const
-    query = sql<SQL>`SELECT ${count ? sql`count(*)` : sql`*`} FROM ${table}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`,
+    query = sql<SQL>`SELECT ${count ? sql`count(${colsSQL})` : colsSQL} FROM ${table}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`,
     rows = query.run(client);
 
   return rows;

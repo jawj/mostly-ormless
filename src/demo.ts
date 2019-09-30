@@ -127,28 +127,32 @@ import * as s from "./schema";
     console.log('\n=== Querying a subset of fields ===\n');
 
     const bookCols = <const>['id', 'title'];
-    type BookDetails = s.books.OnlyCols<typeof bookCols>;
+    type BookDatum = s.books.OnlyCols<typeof bookCols>;
 
     const
       query = db.sql<s.books.SQL>`SELECT ${db.cols(bookCols)} FROM ${"books"}`,
-      bookData: BookDetails[] = await query.run(db.pool);
+      bookData: BookDatum[] = await query.run(db.pool);
     
     console.log(bookData);
   })();
   
   await (async () => {
     console.log('\n=== Shortcut functions ===\n');
-
+    
     const
       authorId = 123,
       existingBooks = await db.select(db.pool, "books", { authorId });
     
     console.log(existingBooks);
 
+    const allBookTitles = await db.select(db.pool, "books", undefined, { columns: ['title'] });
+    
+    console.log(allBookTitles);
+
     const lastButOneBook = await db.selectOne(db.pool, "books", { authorId }, {
       order: [{ by: "createdAt", direction: "DESC" }], offset: 1
     });
-    
+
     console.log(lastButOneBook);
 
     const savedBooks = await db.insert(db.pool, "books", [{

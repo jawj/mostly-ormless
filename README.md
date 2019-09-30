@@ -403,11 +403,11 @@ For example:
 
 ```typescript
 const bookCols = <const>['id', 'title'];  // <const> prevents generalization to string[]
-type BookDetails = books.OnlyCols<typeof bookCols>;
+type BookDatum = books.OnlyCols<typeof bookCols>;
 
 const
   query = sql<books.SQL>`SELECT ${cols(bookCols)} FROM ${"books"}`,
-  bookData: BookDetails[] = await query.run(pool);
+  bookData: BookDatum[] = await query.run(pool);
 ```
 
 Giving:
@@ -461,14 +461,24 @@ interface SelectSignatures {
 }
 ```
 
-The `options` keys, as you might have spotted, are `order`, `limit` and `offset`, so I can do this kind of thing:
+The `options` keys include `columns`, which lets me limit the columns to be returned, such as:
+
+```typescript
+const allBookTitles = await db.select(db.pool, "books", undefined, { columns: ['title'] });
+```
+
+The return type is then appropriately narrowed to those columns:
+
+![Screenshot: inferred return type for a subset of columns](README-resources/subset-columns.png)
+
+The `options` keys also include `order`, `limit` and `offset`, so I can do this kind of thing:
 
 ```typescript
 const [lastButOneBook] = await select(pool, "books", { authorId }, 
   { order: [{ by: "createdAt", direction: "DESC" }], limit: 1, offset: 1 });
 ```
 
-The `by` option is being type-checked and auto-completed, of course.
+The order `by` option is being type-checked and auto-completed, of course.
 
 I used destructuring assignment here (`[lastButOneBook] = /* ... */`) to account for the fact that I know this query is only going to return one response. Unfortunately, destructuring is just syntactic sugar for indexing, and indexing in TypeScript [doesn't reflect that the result may be undefined](https://github.com/Microsoft/TypeScript/issues/13778). That means that `lastButOneBook` is now typed as a `books.Selectable`, but it could actually be `undefined`, and that could lead to errors down the line.
 
