@@ -30,7 +30,7 @@ If you want type information that matches a database schema, you have two ways t
 
 On the one hand, you can define a schema in TypeScript (or JavaScript), then automagically issue database commands to sync up the tables and columns. That's the approach taken by both Sequelize and TypeScript. This approach helps manage schema updates across multiple databases (e.g. test, staging, production). But I've always been a bit leery of it: I'm not sure I want any code, let alone a third party npm library, issuing `CREATE`/`ALTER`/`DROP TABLE` statements at will where production data may be involved.
 
-So, on the other hand, you can take the database schema as your source of truth, then interrogate it to discover the tables and column types. This is what [Active Record](https://guides.rubyonrails.org/active_record_basics.html) does (or at least, what it did when I last used it, about 10 years ago), and what I'm going to do here. Managing schema updates across multiple databases is therefore something I'm not going to address.
+So, on the other hand, you can take the database schema as your source of truth, then interrogate it to discover the tables and column types. This is what [Active Record](https://guides.rubyonrails.org/active_record_basics.html) does (or at least, what it did when I last used it, about 10 years ago), and what I'm going to do here. Managing schema updates across multiple databases is therefore something I'm not going to address (but check out tools such as [dbmate](https://github.com/amacneil/dbmate)).
 
 Active Record interrogates the database at runtime, but I'm going to do it prior to runtime: discovering types only at runtime would be largely pointless, since what we want is type information to ease development. 
 
