@@ -401,10 +401,10 @@ const query = db.sql<authorBooksSQL>`
     SELECT coalesce(json_agg(${"books"}.*), '[]') AS ${"books"}
     FROM ${"books"}
     WHERE ${"books"}.${"authorId"} = ${"authors"}.${"id"}
-  ) bq`,
+  ) bq`;
 ```
  
-This approach is straightforward to extend to more complex, nested cases too. Say, for example, that we allowed each book to have multiple tags, with the following addition to the schema:
+This approach is straightforward to extend to more complex, nested cases too. Say, for example, that we let each book have multiple tags, with the following addition to the schema:
 
 ```sql
 CREATE TABLE "tags"
