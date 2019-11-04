@@ -4,8 +4,9 @@ import * as s from "./schema";
 (async () => {
 
   await (async () => {
+    
     // setup (uses shortcut functions)
-    const allTables: s.AllTables = ["appleTransactions", "authors", "books", "emailAuthentication"];
+    const allTables: s.AllTables = ["appleTransactions", "authors", "books", "emailAuthentication", "tags"];
     await db.truncate(db.pool, allTables, "CASCADE");
 
     await db.insert(db.pool, "authors", [
@@ -24,7 +25,7 @@ import * as s from "./schema";
       }
     ]);
     
-    await db.insert(db.pool, "books", [
+    const insertedBooks = await db.insert(db.pool, "books", [
       {
         authorId: 1,
         title: "Pride and Prejudice",
@@ -33,6 +34,12 @@ import * as s from "./schema";
         title: "Love in the Time of Cholera"
       }
     ]);
+
+    db.insert(db.pool, "tags", [
+      { tag: "Spanish", bookId: insertedBooks[1].id },
+      { tag: "1980s", bookId: insertedBooks[1].id },
+    ]);
+
   })();
 
   await (async () => {
@@ -121,6 +128,61 @@ import * as s from "./schema";
       authorBooks: authorBooksSelectable[] = await query.run(db.pool);
 
     console.dir(authorBooks, { depth: null });
+  })();
+
+  await (async () => {
+    console.log('\n=== Alternative one-to-many join (using LATERAL) ===\n');
+
+    type authorBooksSQL = s.authors.SQL | s.books.SQL;
+    type authorBooksSelectable = s.authors.Selectable & {
+      books: s.books.Selectable[]
+    };
+
+    // note: for consistency, and to keep JSON ops in the DB, we could instead write:
+    // SELECT coalesce(jsonb_agg(to_jsonb("authors".*) || to_jsonb(bq.*)), '[]') FROM ...
+    
+    const
+      query = db.sql<authorBooksSQL>`
+        SELECT ${"authors"}.*, bq.* 
+        FROM ${"authors"}
+        CROSS JOIN LATERAL (
+          SELECT coalesce(json_agg(${"books"}.*), '[]') AS ${"books"}
+          FROM ${"books"}
+          WHERE ${"books"}.${"authorId"} = ${"authors"}.${"id"}
+        ) bq;
+        `,
+
+      authorBooks: authorBooksSelectable[] = await query.run(db.pool);
+
+    console.dir(authorBooks, { depth: null });
+  })();
+
+  await (async () => {
+    console.log('\n=== Two-level one-to-many join (using LATERAL) ===\n');
+
+    type authorBookTagsSQL = s.authors.SQL | s.books.SQL | s.tags.SQL;
+    type authorBookTagsSelectable = s.authors.Selectable & {
+      books: (s.books.Selectable & { tags: s.tags.Selectable['tag'] })[]
+    };
+
+    const
+      query = db.sql<authorBookTagsSQL>`
+        SELECT ${"authors"}.*, bq.*
+        FROM ${"authors"}
+        CROSS JOIN LATERAL (
+          SELECT coalesce(jsonb_agg(to_jsonb(${"books"}.*) || to_jsonb(tq.*)), '[]') AS ${"books"}
+          FROM ${"books"}
+          CROSS JOIN LATERAL (
+            SELECT coalesce(jsonb_agg(${"tags"}."tag"), '[]') AS ${"tags"} 
+            FROM ${"tags"}
+            WHERE ${"tags"}.${"bookId"} = ${"books"}.${"id"}
+          ) tq
+          WHERE ${"books"}.${"authorId"} = ${"authors"}.${"id"}
+        ) bq;`,
+
+      authorBookTags: authorBookTagsSelectable[] = await query.run(db.pool);
+
+    console.dir(authorBookTags, { depth: null });
   })();
 
   await (async () => {

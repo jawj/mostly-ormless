@@ -1,10 +1,10 @@
-CREATE TABLE authors 
+CREATE TABLE "authors" 
 ( "id" SERIAL PRIMARY KEY
 , "name" TEXT NOT NULL
 , "isLiving" BOOLEAN
 );
 
-CREATE TABLE books 
+CREATE TABLE "books" 
 ( "id" SERIAL PRIMARY KEY
 , "authorId" INTEGER NOT NULL REFERENCES "authors"("id")
 , "title" TEXT
@@ -12,13 +12,18 @@ CREATE TABLE books
 , "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE "tags"
+( "tag" TEXT NOT NULL
+, "bookId" INTEGER NOT NULL REFERENCES "books"("id")
+);
+CREATE UNIQUE INDEX "tagsUniqueIdx" ON "tags"("bookId", "tag");
+CREATE INDEX "tagsBookIdIdx" ON "tags"("tag");
 
 CREATE TABLE "emailAuthentication" 
 ( "email" TEXT PRIMARY KEY
 , "consecutiveFailedLogins" INTEGER NOT NULL DEFAULT 0
 , "lastFailedLogin" TIMESTAMPTZ
 );
-
 
 CREATE TYPE "appleEnvironment" AS ENUM 
 ( 'PROD'
