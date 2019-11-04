@@ -49,7 +49,6 @@ import * as s from "./schema";
       authorId = 1,
       query = db.sql<s.books.SQL>`
         SELECT * FROM ${"books"} WHERE ${{ authorId }}`,
-      
       existingBooks: s.books.Selectable[] = await query.run(db.pool);
   
     console.log(existingBooks);
@@ -68,7 +67,6 @@ import * as s from "./schema";
           createdAt: db.sql<s.books.SQL>`
             ${db.self} > now() - ${db.param(days)} * INTERVAL '1 DAY'`,
         }}`,
-      
       existingBooks: s.books.Selectable[] = await query.run(db.pool);
   
     console.log(existingBooks);
@@ -85,7 +83,6 @@ import * as s from "./schema";
       query = db.sql<s.books.SQL>`
         INSERT INTO ${"books"} (${db.cols(newBook)})
         VALUES (${db.vals(newBook)})`,
-      
       insertedBooks: s.books.Selectable[] = await query.run(db.pool);
     
     console.log(insertedBooks);
@@ -102,7 +99,6 @@ import * as s from "./schema";
         SELECT ${"books"}.*, to_jsonb(${"authors"}.*) as ${"author"}
         FROM ${"books"} JOIN ${"authors"} 
           ON ${"books"}.${"authorId"} = ${"authors"}.${"id"}`,
-
       bookAuthors: bookAuthorSelectable[] = await query.run(db.pool);
     
     console.log(bookAuthors);
@@ -124,7 +120,6 @@ import * as s from "./schema";
         FROM ${"authors"} LEFT JOIN ${"books"} 
           ON ${"authors"}.${"id"} = ${"books"}.${"authorId"}
         GROUP BY ${"authors"}.${"id"}`,
-
       authorBooks: authorBooksSelectable[] = await query.run(db.pool);
 
     console.dir(authorBooks, { depth: null });
@@ -134,9 +129,7 @@ import * as s from "./schema";
     console.log('\n=== Alternative one-to-many join (using LATERAL) ===\n');
 
     type authorBooksSQL = s.authors.SQL | s.books.SQL;
-    type authorBooksSelectable = s.authors.Selectable & {
-      books: s.books.Selectable[]
-    };
+    type authorBooksSelectable = s.authors.Selectable & { books: s.books.Selectable[] };
 
     // note: for consistency, and to keep JSON ops in the DB, we could instead write:
     // SELECT coalesce(jsonb_agg(to_jsonb("authors".*) || to_jsonb(bq.*)), '[]') FROM ...
@@ -144,14 +137,11 @@ import * as s from "./schema";
     const
       query = db.sql<authorBooksSQL>`
         SELECT ${"authors"}.*, bq.* 
-        FROM ${"authors"}
-        CROSS JOIN LATERAL (
+        FROM ${"authors"} CROSS JOIN LATERAL (
           SELECT coalesce(json_agg(${"books"}.*), '[]') AS ${"books"}
           FROM ${"books"}
           WHERE ${"books"}.${"authorId"} = ${"authors"}.${"id"}
-        ) bq;
-        `,
-
+        ) bq`,
       authorBooks: authorBooksSelectable[] = await query.run(db.pool);
 
     console.dir(authorBooks, { depth: null });
@@ -168,18 +158,15 @@ import * as s from "./schema";
     const
       query = db.sql<authorBookTagsSQL>`
         SELECT ${"authors"}.*, bq.*
-        FROM ${"authors"}
-        CROSS JOIN LATERAL (
+        FROM ${"authors"} CROSS JOIN LATERAL (
           SELECT coalesce(jsonb_agg(to_jsonb(${"books"}.*) || to_jsonb(tq.*)), '[]') AS ${"books"}
-          FROM ${"books"}
-          CROSS JOIN LATERAL (
-            SELECT coalesce(jsonb_agg(${"tags"}."tag"), '[]') AS ${"tags"} 
+          FROM ${"books"} CROSS JOIN LATERAL (
+            SELECT coalesce(jsonb_agg(${"tags"}.${"tag"}), '[]') AS ${"tags"} 
             FROM ${"tags"}
             WHERE ${"tags"}.${"bookId"} = ${"books"}.${"id"}
           ) tq
           WHERE ${"books"}.${"authorId"} = ${"authors"}.${"id"}
-        ) bq;`,
-
+        ) bq`,
       authorBookTags: authorBookTagsSelectable[] = await query.run(db.pool);
 
     console.dir(authorBookTags, { depth: null });

@@ -346,7 +346,6 @@ const
     FROM ${"authors"} JOIN ${"books"} 
       ON ${"authors"}.${"id"} = ${"books"}.${"authorId"}
     GROUP BY ${"authors"}.${"id"}`,
-
   authorBooks: authorBooksSelectable[] = await query.run(pool);
 ```
 
@@ -393,6 +392,85 @@ const query = sql<authorBooksSQL>`
   GROUP BY ${"authors"}.${"id"}`;
 ```
 
+Alternatively, we can achieve the same result using a [`LATERAL` join](https://medium.com/kkempin/postgresqls-lateral-join-bfd6bd0199df) instead:
+
+```typescript
+const query = db.sql<authorBooksSQL>`
+  SELECT ${"authors"}.*, bq.* 
+  FROM ${"authors"} CROSS JOIN LATERAL (
+    SELECT coalesce(json_agg(${"books"}.*), '[]') AS ${"books"}
+    FROM ${"books"}
+    WHERE ${"books"}.${"authorId"} = ${"authors"}.${"id"}
+  ) bq`,
+```
+ 
+This approach is straightforward to extend to more complex, nested cases too. Say, for example, that we allowed each book to have multiple tags, with the following addition to the schema:
+
+```sql
+CREATE TABLE "tags"
+( "tag" TEXT NOT NULL
+, "bookId" INTEGER NOT NULL REFERENCES "books"("id")
+);
+CREATE UNIQUE INDEX "tagsUniqueIdx" ON "tags"("bookId", "tag");
+CREATE INDEX "tagsBookIdIdx" ON "tags"("tag");
+```
+
+Then we could retrieve authors, each with their books, each with its tag values, using the following screenful:
+
+```typescript
+type authorBookTagsSQL = authors.SQL | books.SQL | tags.SQL;
+type authorBookTagsSelectable = authors.Selectable & {
+  books: (books.Selectable & { tags: tags.Selectable['tag'] })[]
+};
+
+const query = sql<authorBookTagsSQL>`
+  SELECT ${"authors"}.*, bq.*
+  FROM ${"authors"} CROSS JOIN LATERAL (
+    SELECT coalesce(jsonb_agg(to_jsonb(${"books"}.*) || to_jsonb(tq.*)), '[]') AS ${"books"}
+    FROM ${"books"} CROSS JOIN LATERAL (
+      SELECT coalesce(jsonb_agg(${"tags"}.${"tag"}), '[]') AS ${"tags"} 
+      FROM ${"tags"}
+      WHERE ${"tags"}.${"bookId"} = ${"books"}.${"id"}
+    ) tq
+    WHERE ${"books"}.${"authorId"} = ${"authors"}.${"id"}
+  ) bq`;
+
+const authorBookTags: authorBookTagsSelectable[] = await query.run(pool);
+console.dir(authorBookTags, { depth: null });
+```
+
+Which gives, correctly typed:
+
+```typescript
+[ { id: 1,
+    name: 'Jane Austen',
+    isLiving: false,
+    books:
+     [ { id: 284,
+         tags: [],
+         title: 'Pride and Prejudice',
+         authorId: 1,
+         createdAt: '2019-11-04T17:06:11.209512+00:00',
+         updatedAt: '2019-11-04T17:06:11.209512+00:00' } ] },
+  { id: 123,
+    name: 'Gabriel Garcia Marquez',
+    isLiving: false,
+    books:
+     [ { id: 285,
+         tags: [ 'Spanish', '1980s' ],
+         title: 'Love in the Time of Cholera',
+         authorId: 123,
+         createdAt: '2019-11-04T17:06:11.209512+00:00',
+         updatedAt: '2019-11-04T17:06:11.209512+00:00' },
+       { id: 286,
+         tags: [],
+         title: 'One Hundred Years of Solitude',
+         authorId: 123,
+         createdAt: '2019-11-04T17:06:11.228866+00:00',
+         updatedAt: '2019-11-04T17:06:11.228866+00:00' } ] },
+  { id: 456, name: 'Douglas Adams', isLiving: false, books: [] } ]
+```
+
 **Field subsets**
 
 Unless you have very wide tables and/or very large values, it could be a [premature optimization](https://softwareengineering.stackexchange.com/questions/80084/is-premature-optimization-really-the-root-of-all-evil) to query only for a subset of fields.
@@ -426,7 +504,9 @@ And that marks the end of Act 2. SQL queries are now being auto-completed and ty
 <a name="act3"></a>Act 3: In which we create a set of simple shortcut functions on top, which looks a little bit like an ORM but really isn't
 --
 
-In the final Act, I aim to make the simple one-table stuff fall-off-a-log easy with some straightforward helper functions. For these helper functions I generate a set of overloaded signatures per table, which means the return type and all other argument types can be inferred automatically from the table name argument.
+In the final Act, I aim to make the simple one-table CRUD stuff fall-off-a-log easy with some straightforward helper functions. For these helper functions I generate a set of overloaded signatures per table, which means the return type and all other argument types can be inferred automatically from the table name argument.
+
+I haven't yet done anything to help with JOINs, but that may be worth considering for the future.
 
 **`SELECT`**
 
