@@ -102,8 +102,20 @@ import * as s from "./schema";
       bookAuthors: bookAuthorSelectable[] = await query.run(db.pool);
     
     console.log(bookAuthors);
-  })();
 
+    const q = await db.select('books', db.all, {
+      lateral: {
+        authors: db.select('authors', db.sql`${"authors"}.${"id"} = ${"books"}.${"authorId"}`)
+      }
+    });
+    console.log(q.compile());
+    const r = await q.run(db.pool);
+    console.dir(r, { depth: null });
+
+    // console.log(r.map(b => b.authors.map(a => a.name)));
+
+  })();
+/*
   await (async () => {
     console.log('\n=== One-to-many join (each author with their many books) ===\n');
 
@@ -124,7 +136,7 @@ import * as s from "./schema";
 
     console.dir(authorBooks, { depth: null });
   })();
-
+*/
   await (async () => {
     console.log('\n=== Alternative one-to-many join (using LATERAL) ===\n');
 
@@ -145,8 +157,19 @@ import * as s from "./schema";
       authorBooks: authorBooksSelectable[] = await query.run(db.pool);
 
     console.dir(authorBooks, { depth: null });
-  })();
 
+    const q = await db.select('authors', db.all, {
+      lateral: {
+        books: db.select('books', db.sql`${"books"}.${"authorId"} = ${"authors"}.${"id"}`)
+      }
+    });
+    const r = await q.run(db.pool);
+    console.dir(r, { depth: null });
+
+    // console.log(r[0].books[0].title);
+
+  })();
+/*
   await (async () => {
     console.log('\n=== Two-level one-to-many join (using LATERAL) ===\n');
 
@@ -287,6 +310,6 @@ import * as s from "./schema";
     
     console.log(result);
   })();
-  
+*/
   await db.pool.end();
 })();

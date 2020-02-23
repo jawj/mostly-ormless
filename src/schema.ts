@@ -16,10 +16,13 @@ import {
     JSONArray,
     SQLFragment,
     GenericSQLExpression,
+    SQLExpression,
+    AllType,
     ColumnNames,
     ColumnValues,
     Queryable,
     UpsertAction,
+    select,
 } from "./core";
 
 export type appleEnvironment = 'PROD' | 'Sandbox';
@@ -85,11 +88,14 @@ export namespace authors {
         direction: 'ASC' | 'DESC',
         nulls?: 'FIRST' | 'LAST',
     }
-    export interface SelectOptions<C extends readonly Column[] > {
+	export interface SelectOptions<C extends Column[], L extends undefined | { [k: string]: ReturnType<typeof select> }> {
         order?: OrderSpec[];
         limit?: number,
         offset?: number,
         columns?: C,
+        lateral?: L,
+        count?: boolean,  // for use by count
+        one?: boolean,  // for use by selectOne
     }
 }
 
@@ -121,11 +127,14 @@ export namespace books {
         direction: 'ASC' | 'DESC',
         nulls?: 'FIRST' | 'LAST',
     }
-    export interface SelectOptions<C extends readonly Column[] > {
+    export interface SelectOptions<C extends Column[], L extends undefined | { [k: string]: ReturnType<typeof select> }> {
         order?: OrderSpec[];
         limit?: number,
         offset?: number,
         columns?: C,
+        lateral?: L,
+        count?: boolean,  // for use by count
+        one?: boolean,  // for use by selectOne
     }
 }
 
@@ -237,12 +246,29 @@ export interface DeleteSignatures {
     (client: Queryable, table: emailAuthentication.Table, where: emailAuthentication.Whereable): Promise<emailAuthentication.Selectable[]>;
     (client: Queryable, table: tags.Table, where: tags.Whereable): Promise<tags.Selectable[]>;
 }
+
+
+type PromisedType<P> = P extends Promise<infer U> ? U : never;
+	
+
+
 export interface SelectSignatures {
+	<C extends books.Column[], L extends { [k: string]: { run: (...args: any) => any } }>(
+		table: books.Table, where: books.Whereable | SQLFragment | AllType, options?: books.SelectOptions<C, L>
+	): SQLFragment<((C extends undefined ? books.Selectable : books.OnlyCols<C>) &
+		(L extends undefined ? {} : { [K in keyof L]: PromisedType<ReturnType<L[K]['run']>> }))[]>; 
+    
+	<C extends authors.Column[], L extends { [k: string]: { run: (...args: any) => any } }>(
+		table: authors.Table, where: authors.Whereable | SQLFragment | AllType, options?: authors.SelectOptions<C, L>
+	): SQLFragment<((C extends undefined ? authors.Selectable : authors.OnlyCols<C>) &
+		(L extends undefined ? {} : { [K in keyof L]: PromisedType<ReturnType<L[K]['run']>> }))[]>;
+    /*
     <T extends readonly appleTransactions.Column[]> (client: Queryable, table: appleTransactions.Table, where ?: appleTransactions.Whereable, options ?: appleTransactions.SelectOptions < T >, count ?: boolean): Promise<T extends undefined ? appleTransactions.Selectable[] : appleTransactions.OnlyCols<T>[]>;
 <T extends readonly authors.Column[]>(client: Queryable, table: authors.Table, where ?: authors.Whereable, options ?: authors.SelectOptions < T >, count ?: boolean): Promise<T extends undefined ? authors.Selectable[] : authors.OnlyCols<T>[]>;
 <T extends readonly books.Column[]>(client: Queryable, table: books.Table, where ?: books.Whereable, options ?: books.SelectOptions < T >, count ?: boolean): Promise<T extends undefined ? books.Selectable[] : books.OnlyCols<T>[]>;
 <T extends readonly emailAuthentication.Column[]>(client: Queryable, table: emailAuthentication.Table, where ?: emailAuthentication.Whereable, options ?: emailAuthentication.SelectOptions < T >, count ?: boolean): Promise<T extends undefined ? emailAuthentication.Selectable[] : emailAuthentication.OnlyCols<T>[]>;
 <T extends readonly tags.Column[]>(client: Queryable, table: tags.Table, where ?: tags.Whereable, options ?: tags.SelectOptions < T >, count ?: boolean): Promise<T extends undefined ? tags.Selectable[] : tags.OnlyCols<T>[]>;
+*/
       }
 export interface SelectOneSignatures {
     <T extends readonly appleTransactions.Column[]> (client: Queryable, table: appleTransactions.Table, where ?: appleTransactions.Whereable, options ?: appleTransactions.SelectOptions<T>): Promise<(T extends undefined ? appleTransactions.Selectable : appleTransactions.OnlyCols<T>) | undefined>;

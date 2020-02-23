@@ -34,6 +34,9 @@ export type DefaultType = typeof Default;
 export const self = Symbol('self');
 export type SelfType = typeof self;
 
+export const all = Symbol('all');
+export type AllType = typeof all;
+
 // see https://github.com/Microsoft/TypeScript/issues/3496#issuecomment-128553540
 export type JSONValue = null | boolean | number | string | JSONObject | JSONArray;
 export interface JSONObject { [k: string]: JSONValue; }
@@ -167,32 +170,52 @@ interface SelectOptions {
   limit?: number,
   offset?: number,
   columns?: Column[],
+  lateral?: { [k: string]: ReturnType<typeof select>; }; // | ReturnType<typeof selectOne> },
+  count?: boolean,  // for use by count
+  one?: boolean,  // for use by selectOne
 }
 
-export const select: SelectSignatures = async function (
-  client: Queryable,
+function unquote(s: string) {
+  if (s.match(/^".*"$/)) return s.slice(1, s.length - 1);
+  return s;
+}
+
+export const select: SelectSignatures = function (
   table: Table,
-  where: Whereable = {},
+  where: Whereable | SQLFragment | AllType = all,
   options: SelectOptions = {},
-  count: boolean = false,
-): Promise<any[]> {
+) {
 
   const
-    colsSQL = !options.columns ? raw('*') : cols(options.columns),
-    whereSQL = Object.keys(where).length > 0 ? [sql` WHERE `, where] : [],
+    colsSQL = options.count ?
+      (options.columns ? sql`count(${cols(options.columns)})` : sql`count("${table}".*)`) :
+      options.columns ?
+        sql`jsonb_build_object(${mapWithSeparator(options.columns, sql`, `, c => sql`'${c}', ${table}."${c}"`)})` :
+        sql`to_jsonb(${table}.*)`,
+    colsLateralSQL = options.lateral === undefined ? [] :
+      sql` || jsonb_build_object(${mapWithSeparator(
+        Object.keys(options.lateral), sql`, `, k => raw(`'${k}', "cj_${unquote(k)}".result`))})`,
+    aggColsSQL = options.one || options.count ?
+      sql`${colsSQL}${colsLateralSQL}` :
+      sql`coalesce(jsonb_agg(${colsSQL}${colsLateralSQL}), '[]')`,
+    whereSQL = where === all ? [] : [sql` WHERE `, where],
     orderSQL = !options.order ? [] :
       [sql` ORDER BY `, ...mapWithSeparator(options.order, sql`, `, o =>
         sql`${o.by} ${raw(o.direction)}${o.nulls ? sql` NULLS ${raw(o.nulls)}` : []}`)],
     limitSQL = options.limit === undefined ? [] : sql` LIMIT ${raw(String(options.limit))}`,
-    offsetSQL = options.offset === undefined ? [] : sql` OFFSET ${raw(String(options.offset))}`;
+    offsetSQL = options.offset === undefined ? [] : sql` OFFSET ${raw(String(options.offset))}`,
+    lateralSQL = options.lateral === undefined ? [] : Object.keys(options.lateral).map(k => {
+      const
+        subName = raw(`"cj_${unquote(k)}"`),  // ideally needs a suffix counter to distinguish depth?
+        subQ = options.lateral![k];
+      return sql` CROSS JOIN LATERAL (${subQ}) ${subName}`;
+    });
 
-  const
-    query = sql<SQL>`SELECT ${count ? sql`count(${colsSQL})` : colsSQL} FROM ${table}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`,
-    rows = query.run(client);
+  const query = sql<SQL>`SELECT ${aggColsSQL} AS result FROM ${table}${lateralSQL}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`;
 
-  return rows;
+  return query;
 }
-
+/*
 // you might argue that 'selectOne' offers little that you can't get with destructuring assignment 
 // and plain 'select' -- i.e. let[x] = select(...) -- but a thing that is definitely worth having 
 // is '| undefined' in the return signature, because the result of indexing never includes undefined
@@ -216,6 +239,7 @@ export const count: CountSignatures = async function
   const rows = await select(client, table as any, where as any, options as any, true) as unknown as CountResult;
   return Number(rows[0].count);
 }
+*/
 
 // === transactions support ===
 
@@ -313,14 +337,14 @@ export function sql<T = SQL>(literals: TemplateStringsArray, ...expressions: T[]
   return new SQLFragment(Array.prototype.slice.apply(literals), expressions);
 }
 
-export class SQLFragment {
+export class SQLFragment<RunResult extends any[] = any[]> {
   constructor(private literals: string[], private expressions: SQLExpression[]) { }
 
-  async run(queryable: Queryable) {
+  async run(queryable: Queryable): Promise<RunResult> {
     const query = this.compile();
     if (config.verbose) console.log(query);
     const { rows } = await queryable.query(query);
-    return rows;
+    return <RunResult>rows;
   }
 
   compile(result: SQLResultType = { text: '', values: [] }, currentAlias?: string) {
