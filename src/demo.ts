@@ -104,15 +104,19 @@ import * as s from "./schema";
     console.log(bookAuthors);
 
     const q = await db.select('books', db.all, {
+      columns: ['title'],
       lateral: {
-        authors: db.select('authors', db.sql`${"authors"}.${"id"} = ${"books"}.${"authorId"}`)
+        authors: db.select('authors', db.sql`${"authors"}.${"id"} = ${"books"}.${"authorId"}`, {
+          columns: ['name'],
+          lateral: { books: db.select('books', db.sql`${"books"}.${"authorId"} = ${"authors"}.${"id"}`, { columns: ['title'] }) }
+        })
       }
     });
     console.log(q.compile());
     const r = await q.run(db.pool);
     console.dir(r, { depth: null });
 
-    // console.log(r.map(b => b.authors.map(a => a.name)));
+    console.log(r.map(b => b.authors.map(a => a.name)));
 
   })();
 /*

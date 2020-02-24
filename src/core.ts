@@ -60,6 +60,8 @@ export type GenericSQLExpression = SQLFragment | Parameter | DefaultType | Dange
 export type SQLExpression = Table | ColumnNames<Updatable | (keyof Updatable)[]> | ColumnValues<Updatable> | Whereable | Column | GenericSQLExpression;
 export type SQL = SQLExpression | SQLExpression[];
 
+export type PromisedType<P> = P extends Promise<infer U> ? U : never;
+
 
 // === simple query helpers ===
 
@@ -175,11 +177,6 @@ interface SelectOptions {
   one?: boolean,  // for use by selectOne
 }
 
-function unquote(s: string) {
-  if (s.match(/^".*"$/)) return s.slice(1, s.length - 1);
-  return s;
-}
-
 export const select: SelectSignatures = function (
   table: Table,
   where: Whereable | SQLFragment | AllType = all,
@@ -188,13 +185,13 @@ export const select: SelectSignatures = function (
 
   const
     colsSQL = options.count ?
-      (options.columns ? sql`count(${cols(options.columns)})` : sql`count("${table}".*)`) :
+      (options.columns ? sql`count(${cols(options.columns)})` : sql`count(${table}.*)`) :
       options.columns ?
-        sql`jsonb_build_object(${mapWithSeparator(options.columns, sql`, `, c => sql`'${c}', ${table}."${c}"`)})` :
+        sql`jsonb_build_object(${mapWithSeparator(options.columns, sql`, `, c => raw(`'${c}', "${table}"."${c}"`))})` :
         sql`to_jsonb(${table}.*)`,
     colsLateralSQL = options.lateral === undefined ? [] :
       sql` || jsonb_build_object(${mapWithSeparator(
-        Object.keys(options.lateral), sql`, `, k => raw(`'${k}', "cj_${unquote(k)}".result`))})`,
+        Object.keys(options.lateral), sql`, `, k => raw(`'${k}', "cj_${k}".result`))})`,
     aggColsSQL = options.one || options.count ?
       sql`${colsSQL}${colsLateralSQL}` :
       sql`coalesce(jsonb_agg(${colsSQL}${colsLateralSQL}), '[]')`,
@@ -206,12 +203,13 @@ export const select: SelectSignatures = function (
     offsetSQL = options.offset === undefined ? [] : sql` OFFSET ${raw(String(options.offset))}`,
     lateralSQL = options.lateral === undefined ? [] : Object.keys(options.lateral).map(k => {
       const
-        subName = raw(`"cj_${unquote(k)}"`),  // ideally needs a suffix counter to distinguish depth?
+        subName = raw(`"cj_${k}"`),  // ideally needs a suffix counter to distinguish depth?
         subQ = options.lateral![k];
       return sql` CROSS JOIN LATERAL (${subQ}) ${subName}`;
     });
 
   const query = sql<SQL>`SELECT ${aggColsSQL} AS result FROM ${table}${lateralSQL}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`;
+  query.transformRunResult = (qr) => qr.rows[0].result;
 
   return query;
 }
@@ -337,14 +335,17 @@ export function sql<T = SQL>(literals: TemplateStringsArray, ...expressions: T[]
   return new SQLFragment(Array.prototype.slice.apply(literals), expressions);
 }
 
-export class SQLFragment<RunResult extends any[] = any[]> {
+export class SQLFragment<RunResult extends any = any[]> {
+
   constructor(private literals: string[], private expressions: SQLExpression[]) { }
+
+  transformRunResult: (qr: pg.QueryResult) => any = (qr) => qr.rows;  // default is to return array of rows
 
   async run(queryable: Queryable): Promise<RunResult> {
     const query = this.compile();
     if (config.verbose) console.log(query);
-    const { rows } = await queryable.query(query);
-    return <RunResult>rows;
+    const qr = await queryable.query(query);
+    return this.transformRunResult(qr);
   }
 
   compile(result: SQLResultType = { text: '', values: [] }, currentAlias?: string) {

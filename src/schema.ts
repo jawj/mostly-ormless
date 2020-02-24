@@ -22,7 +22,7 @@ import {
     ColumnValues,
     Queryable,
     UpsertAction,
-    select,
+	PromisedType,
 } from "./core";
 
 export type appleEnvironment = 'PROD' | 'Sandbox';
@@ -247,9 +247,6 @@ export interface DeleteSignatures {
     (client: Queryable, table: tags.Table, where: tags.Whereable): Promise<tags.Selectable[]>;
 }
 
-
-type PromisedType<P> = P extends Promise<infer U> ? U : never;
-	
 
 
 export interface SelectSignatures {
