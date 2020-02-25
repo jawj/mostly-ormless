@@ -60,7 +60,12 @@ export type GenericSQLExpression = SQLFragment | Parameter | DefaultType | Dange
 export type SQLExpression = Table | ColumnNames<Updatable | (keyof Updatable)[]> | ColumnValues<Updatable> | Whereable | Column | GenericSQLExpression;
 export type SQL = SQLExpression | SQLExpression[];
 
+
+export interface Runnable { run: (...args: any) => any };
+export interface RunnablesMap { [k: string]: Runnable };
 export type PromisedType<P> = P extends Promise<infer U> ? U : never;
+export type PromisedRunnableReturnType<R extends Runnable> = PromisedType<ReturnType<R['run']>>;
+export type PromisedRunnableReturnTypeMap<L extends RunnablesMap> = { [K in keyof L]: PromisedRunnableReturnType<L[K]> };
 
 
 // === simple query helpers ===
@@ -167,24 +172,32 @@ interface OrderSpec {
   nulls?: 'FIRST' | 'LAST',
 }
 
+export enum SelectResultMode {
+  Many,
+  One,
+  Count,
+}
+
 interface SelectOptions {
   order?: OrderSpec[];
   limit?: number,
   offset?: number,
   columns?: Column[],
   lateral?: { [k: string]: ReturnType<typeof select>; }; // | ReturnType<typeof selectOne> },
-  count?: boolean,  // for use by count
-  one?: boolean,  // for use by selectOne
+  // count?: boolean,  // for use by count
+  // one?: boolean,  // for use by selectOne
 }
 
 export const select: SelectSignatures = function (
   table: Table,
   where: Whereable | SQLFragment | AllType = all,
-  options: SelectOptions = {},
+  rawOptions: SelectOptions = {},
+  mode: SelectResultMode = SelectResultMode.Many,
 ) {
-
+  
   const
-    colsSQL = options.count ?
+    options = SelectResultMode.One ? Object.assign({}, rawOptions, { limit: 1 }) : rawOptions,
+    colsSQL = mode === SelectResultMode.Count ?
       (options.columns ? sql`count(${cols(options.columns)})` : sql`count(${table}.*)`) :
       options.columns ?
         sql`jsonb_build_object(${mapWithSeparator(options.columns, sql`, `, c => raw(`'${c}', "${table}"."${c}"`))})` :
@@ -192,9 +205,8 @@ export const select: SelectSignatures = function (
     colsLateralSQL = options.lateral === undefined ? [] :
       sql` || jsonb_build_object(${mapWithSeparator(
         Object.keys(options.lateral), sql`, `, k => raw(`'${k}', "cj_${k}".result`))})`,
-    aggColsSQL = options.one || options.count ?
-      sql`${colsSQL}${colsLateralSQL}` :
-      sql`coalesce(jsonb_agg(${colsSQL}${colsLateralSQL}), '[]')`,
+    allColsSQL = sql`${colsSQL}${colsLateralSQL}`,
+    aggColsSQL = mode === SelectResultMode.Many ? sql`coalesce(jsonb_agg(${allColsSQL}), '[]')` : allColsSQL,
     whereSQL = where === all ? [] : [sql` WHERE `, where],
     orderSQL = !options.order ? [] :
       [sql` ORDER BY `, ...mapWithSeparator(options.order, sql`, `, o =>
@@ -203,7 +215,7 @@ export const select: SelectSignatures = function (
     offsetSQL = options.offset === undefined ? [] : sql` OFFSET ${raw(String(options.offset))}`,
     lateralSQL = options.lateral === undefined ? [] : Object.keys(options.lateral).map(k => {
       const
-        subName = raw(`"cj_${k}"`),  // ideally needs a suffix counter to distinguish depth?
+        subName = raw(`"cj_${k}"`),  // may need a suffix counter to distinguish depth?
         subQ = options.lateral![k];
       return sql` CROSS JOIN LATERAL (${subQ}) ${subName}`;
     });
@@ -213,22 +225,20 @@ export const select: SelectSignatures = function (
 
   return query;
 }
-/*
+
 // you might argue that 'selectOne' offers little that you can't get with destructuring assignment 
 // and plain 'select' -- i.e. let[x] = select(...) -- but a thing that is definitely worth having 
 // is '| undefined' in the return signature, because the result of indexing never includes undefined
 // (see e.g. https://github.com/Microsoft/TypeScript/issues/13778)
-export const selectOne: SelectOneSignatures = async function
-  (client: Queryable, table: Table, where: Whereable = {}, options: SelectOptions = {}): Promise<any> {
-
-  const
-    limitedOptions = Object.assign({}, options, { limit: 1 }),
-    rows = await select(client, table as any, where as any, limitedOptions);
-
-  return rows[0];
+export const selectOne: SelectOneSignatures = function (
+  table: Table,
+  where: Whereable | SQLFragment | AllType = all,
+  options: SelectOptions = {},
+) {
+  return select(<any>table, <any>where, <any>options, SelectResultMode.One);
 }
 
-
+/*
 type CountResult = [{ count: string }];
 
 export const count: CountSignatures = async function

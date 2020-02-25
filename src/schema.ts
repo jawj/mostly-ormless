@@ -23,6 +23,10 @@ import {
     Queryable,
     UpsertAction,
 	PromisedType,
+    SelectResultMode,
+    RunnablesMap,
+    PromisedRunnableReturnType,
+    PromisedRunnableReturnTypeMap,
 } from "./core";
 
 export type appleEnvironment = 'PROD' | 'Sandbox';
@@ -248,17 +252,36 @@ export interface DeleteSignatures {
 }
 
 
-
 export interface SelectSignatures {
-	<C extends books.Column[], L extends { [k: string]: { run: (...args: any) => any } }>(
-		table: books.Table, where: books.Whereable | SQLFragment | AllType, options?: books.SelectOptions<C, L>
-	): SQLFragment<((C extends undefined ? books.Selectable : books.OnlyCols<C>) &
-		(L extends undefined ? {} : { [K in keyof L]: PromisedType<ReturnType<L[K]['run']>> }))[]>; 
+    <C extends books.Column[], L extends RunnablesMap, M extends SelectResultMode = SelectResultMode.Many>(
+        table: books.Table,
+        where: books.Whereable | SQLFragment | AllType,
+        options?: books.SelectOptions<C, L>,
+        mode?: M,
+    ): SQLFragment<
+        M extends SelectResultMode.Many ?
+        (L extends undefined ?
+            (C extends undefined ? books.Selectable : books.OnlyCols<C>) :
+            (C extends undefined ? books.Selectable : books.OnlyCols<C>) & PromisedRunnableReturnTypeMap<L>)[] :
+        (L extends undefined ?
+            (C extends undefined ? books.Selectable : books.OnlyCols<C>) :
+            (C extends undefined ? books.Selectable : books.OnlyCols<C>) & PromisedRunnableReturnTypeMap<L>)
+    >; 
     
-	<C extends authors.Column[], L extends { [k: string]: { run: (...args: any) => any } }>(
-		table: authors.Table, where: authors.Whereable | SQLFragment | AllType, options?: authors.SelectOptions<C, L>
-	): SQLFragment<((C extends undefined ? authors.Selectable : authors.OnlyCols<C>) &
-		(L extends undefined ? {} : { [K in keyof L]: PromisedType<ReturnType<L[K]['run']>> }))[]>;
+    <C extends authors.Column[], L extends RunnablesMap, M extends SelectResultMode = SelectResultMode.Many>(
+        table: authors.Table,
+        where: authors.Whereable | SQLFragment | AllType,
+        options?: authors.SelectOptions<C, L>,
+        mode?: M,
+    ): SQLFragment<
+        M extends SelectResultMode.Many ?
+        (L extends undefined ?
+            (C extends undefined ? authors.Selectable : authors.OnlyCols<C>) :
+            (C extends undefined ? authors.Selectable : authors.OnlyCols<C>) & PromisedRunnableReturnTypeMap<L>)[] :
+        (L extends undefined ?
+            (C extends undefined ? authors.Selectable : authors.OnlyCols<C>) :
+            (C extends undefined ? authors.Selectable : authors.OnlyCols<C>) & PromisedRunnableReturnTypeMap<L>)
+    >;
     /*
     <T extends readonly appleTransactions.Column[]> (client: Queryable, table: appleTransactions.Table, where ?: appleTransactions.Whereable, options ?: appleTransactions.SelectOptions < T >, count ?: boolean): Promise<T extends undefined ? appleTransactions.Selectable[] : appleTransactions.OnlyCols<T>[]>;
 <T extends readonly authors.Column[]>(client: Queryable, table: authors.Table, where ?: authors.Whereable, options ?: authors.SelectOptions < T >, count ?: boolean): Promise<T extends undefined ? authors.Selectable[] : authors.OnlyCols<T>[]>;
@@ -268,11 +291,33 @@ export interface SelectSignatures {
 */
       }
 export interface SelectOneSignatures {
+    <C extends books.Column[], L extends RunnablesMap>(
+        table: books.Table,
+        where: books.Whereable | SQLFragment | AllType,
+        options?: books.SelectOptions<C, L>,
+    ): SQLFragment<
+        (L extends undefined ?
+            (C extends undefined ? books.Selectable : books.OnlyCols<C>) :
+            (C extends undefined ? books.Selectable : books.OnlyCols<C>) & PromisedRunnableReturnTypeMap<L>)
+        >; 
+    
+    <C extends authors.Column[], L extends RunnablesMap>(
+        table: authors.Table,
+        where: authors.Whereable | SQLFragment | AllType,
+        options?: authors.SelectOptions<C, L>,
+    ): SQLFragment<
+        (L extends undefined ?
+            (C extends undefined ? authors.Selectable : authors.OnlyCols<C>) :
+            (C extends undefined ? authors.Selectable : authors.OnlyCols<C>) & PromisedRunnableReturnTypeMap<L>)
+        >;
+    
+    /*
     <T extends readonly appleTransactions.Column[]> (client: Queryable, table: appleTransactions.Table, where ?: appleTransactions.Whereable, options ?: appleTransactions.SelectOptions<T>): Promise<(T extends undefined ? appleTransactions.Selectable : appleTransactions.OnlyCols<T>) | undefined>;
 <T extends readonly authors.Column[]>(client: Queryable, table: authors.Table, where ?: authors.Whereable, options ?: authors.SelectOptions<T>): Promise<(T extends undefined ? authors.Selectable : authors.OnlyCols<T>) | undefined>;
 <T extends readonly books.Column[]>(client: Queryable, table: books.Table, where ?: books.Whereable, options ?: books.SelectOptions<T>): Promise<(T extends undefined ? books.Selectable : books.OnlyCols<T>) | undefined>;
 <T extends readonly emailAuthentication.Column[]>(client: Queryable, table: emailAuthentication.Table, where ?: emailAuthentication.Whereable, options ?: emailAuthentication.SelectOptions<T>): Promise<(T extends undefined ? emailAuthentication.Selectable : emailAuthentication.OnlyCols<T>) | undefined>;
 <T extends readonly tags.Column[]>(client: Queryable, table: tags.Table, where ?: tags.Whereable, options ?: tags.SelectOptions<T>): Promise<(T extends undefined ? tags.Selectable : tags.OnlyCols<T>) | undefined>;
+*/
       }
 export interface CountSignatures {
     (client: Queryable, table: appleTransactions.Table, where?: appleTransactions.Whereable): Promise<number>;

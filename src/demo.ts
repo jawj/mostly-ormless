@@ -106,17 +106,16 @@ import * as s from "./schema";
     const q = await db.select('books', db.all, {
       columns: ['title'],
       lateral: {
-        authors: db.select('authors', db.sql`${"authors"}.${"id"} = ${"books"}.${"authorId"}`, {
-          columns: ['name'],
+        author: db.selectOne('authors', db.sql`${"authors"}.${"id"} = ${"books"}.${"authorId"}`, {
+          columns: ['name', 'isLiving'],
           lateral: { books: db.select('books', db.sql`${"books"}.${"authorId"} = ${"authors"}.${"id"}`, { columns: ['title'] }) }
         })
       }
     });
-    console.log(q.compile());
     const r = await q.run(db.pool);
     console.dir(r, { depth: null });
 
-    console.log(r.map(b => b.authors.map(a => a.name)));
+    console.log(r.map(b => b.author.books.map (x => x.title)));
 
   })();
 /*
