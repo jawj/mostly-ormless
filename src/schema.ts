@@ -92,15 +92,20 @@ export namespace authors {
         direction: 'ASC' | 'DESC',
         nulls?: 'FIRST' | 'LAST',
     }
-	export interface SelectOptions<C extends Column[], L extends undefined | { [k: string]: ReturnType<typeof select> }> {
+    export interface SelectOptions<C extends Column[], L extends RunnablesMap> {
         order?: OrderSpec[];
         limit?: number,
         offset?: number,
         columns?: C,
         lateral?: L,
-        count?: boolean,  // for use by count
-        one?: boolean,  // for use by selectOne
     }
+    type BaseSelectReturnType<C extends Column[]> = C extends undefined ? Selectable : OnlyCols<C>;
+    type WithLateralSelectReturnType<C extends Column[], L extends RunnablesMap> =
+        L extends undefined ? BaseSelectReturnType<C> : BaseSelectReturnType<C> & PromisedRunnableReturnTypeMap<L>;
+    export type FullSelectReturnType<C extends Column[], L extends RunnablesMap, M extends SelectResultMode> =
+        M extends SelectResultMode.Many ? WithLateralSelectReturnType<C, L>[] :
+        M extends SelectResultMode.One ? undefined | WithLateralSelectReturnType<C, L> :
+        M extends SelectResultMode.Count ? number : never;
 }
 
 export namespace books {
@@ -131,15 +136,19 @@ export namespace books {
         direction: 'ASC' | 'DESC',
         nulls?: 'FIRST' | 'LAST',
     }
-    export interface SelectOptions<C extends Column[], L extends undefined | { [k: string]: ReturnType<typeof select> }> {
+    export interface SelectOptions<C extends Column[], L extends RunnablesMap> {
         order?: OrderSpec[];
         limit?: number,
         offset?: number,
         columns?: C,
         lateral?: L,
-        count?: boolean,  // for use by count
-        one?: boolean,  // for use by selectOne
     }
+    type BaseSelectReturnType<C extends Column[]> = C extends undefined ? Selectable : OnlyCols<C>;
+    type WithLateralSelectReturnType<C extends Column[], L extends RunnablesMap> =
+        L extends undefined ? BaseSelectReturnType<C> : BaseSelectReturnType<C> & PromisedRunnableReturnTypeMap<L>;
+    export type FullSelectReturnType<C extends Column[], L extends RunnablesMap, M extends SelectResultMode> =
+        M extends SelectResultMode.Many ? WithLateralSelectReturnType<C, L>[] :
+        M extends SelectResultMode.One ? undefined | WithLateralSelectReturnType<C, L>: number;
 }
 
 export namespace emailAuthentication {
@@ -258,30 +267,14 @@ export interface SelectSignatures {
         where: books.Whereable | SQLFragment | AllType,
         options?: books.SelectOptions<C, L>,
         mode?: M,
-    ): SQLFragment<
-        M extends SelectResultMode.Many ?
-        (L extends undefined ?
-            (C extends undefined ? books.Selectable : books.OnlyCols<C>) :
-            (C extends undefined ? books.Selectable : books.OnlyCols<C>) & PromisedRunnableReturnTypeMap<L>)[] :
-        (L extends undefined ?
-            (C extends undefined ? books.Selectable : books.OnlyCols<C>) :
-            (C extends undefined ? books.Selectable : books.OnlyCols<C>) & PromisedRunnableReturnTypeMap<L>)
-    >; 
+    ): SQLFragment<books.FullSelectReturnType<C, L, M>>; 
     
     <C extends authors.Column[], L extends RunnablesMap, M extends SelectResultMode = SelectResultMode.Many>(
         table: authors.Table,
         where: authors.Whereable | SQLFragment | AllType,
         options?: authors.SelectOptions<C, L>,
         mode?: M,
-    ): SQLFragment<
-        M extends SelectResultMode.Many ?
-        (L extends undefined ?
-            (C extends undefined ? authors.Selectable : authors.OnlyCols<C>) :
-            (C extends undefined ? authors.Selectable : authors.OnlyCols<C>) & PromisedRunnableReturnTypeMap<L>)[] :
-        (L extends undefined ?
-            (C extends undefined ? authors.Selectable : authors.OnlyCols<C>) :
-            (C extends undefined ? authors.Selectable : authors.OnlyCols<C>) & PromisedRunnableReturnTypeMap<L>)
-    >;
+    ): SQLFragment<authors.FullSelectReturnType<C, L, M>>;
     /*
     <T extends readonly appleTransactions.Column[]> (client: Queryable, table: appleTransactions.Table, where ?: appleTransactions.Whereable, options ?: appleTransactions.SelectOptions < T >, count ?: boolean): Promise<T extends undefined ? appleTransactions.Selectable[] : appleTransactions.OnlyCols<T>[]>;
 <T extends readonly authors.Column[]>(client: Queryable, table: authors.Table, where ?: authors.Whereable, options ?: authors.SelectOptions < T >, count ?: boolean): Promise<T extends undefined ? authors.Selectable[] : authors.OnlyCols<T>[]>;
@@ -295,21 +288,13 @@ export interface SelectOneSignatures {
         table: books.Table,
         where: books.Whereable | SQLFragment | AllType,
         options?: books.SelectOptions<C, L>,
-    ): SQLFragment<
-        (L extends undefined ?
-            (C extends undefined ? books.Selectable : books.OnlyCols<C>) :
-            (C extends undefined ? books.Selectable : books.OnlyCols<C>) & PromisedRunnableReturnTypeMap<L>)
-        >; 
+    ): SQLFragment<books.FullSelectReturnType<C, L, SelectResultMode.One>>; 
     
     <C extends authors.Column[], L extends RunnablesMap>(
         table: authors.Table,
         where: authors.Whereable | SQLFragment | AllType,
         options?: authors.SelectOptions<C, L>,
-    ): SQLFragment<
-        (L extends undefined ?
-            (C extends undefined ? authors.Selectable : authors.OnlyCols<C>) :
-            (C extends undefined ? authors.Selectable : authors.OnlyCols<C>) & PromisedRunnableReturnTypeMap<L>)
-        >;
+    ): SQLFragment<authors.FullSelectReturnType<C, L, SelectResultMode.One>>;
     
     /*
     <T extends readonly appleTransactions.Column[]> (client: Queryable, table: appleTransactions.Table, where ?: appleTransactions.Whereable, options ?: appleTransactions.SelectOptions<T>): Promise<(T extends undefined ? appleTransactions.Selectable : appleTransactions.OnlyCols<T>) | undefined>;
@@ -320,9 +305,11 @@ export interface SelectOneSignatures {
 */
       }
 export interface CountSignatures {
-    (client: Queryable, table: appleTransactions.Table, where?: appleTransactions.Whereable): Promise<number>;
-    (client: Queryable, table: authors.Table, where?: authors.Whereable): Promise<number>;
-    (client: Queryable, table: books.Table, where?: books.Whereable): Promise<number>;
-    (client: Queryable, table: emailAuthentication.Table, where?: emailAuthentication.Whereable): Promise<number>;
-    (client: Queryable, table: tags.Table, where?: tags.Whereable): Promise<number>;
+    (table: authors.Table, where?: authors.Whereable | SQLFragment | AllType): SQLFragment<number>;
+    (table: books.Table, where?: books.Whereable | SQLFragment | AllType): SQLFragment<number>;
+/*
+    (table: appleTransactions.Table, where?: appleTransactions.Whereable): Promise<number>;
+    (table: emailAuthentication.Table, where?: emailAuthentication.Whereable): Promise<number>;
+    (table: tags.Table, where?: tags.Whereable): Promise<number>;
+    */
 }

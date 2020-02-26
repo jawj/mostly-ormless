@@ -238,16 +238,13 @@ export const selectOne: SelectOneSignatures = function (
   return select(<any>table, <any>where, <any>options, SelectResultMode.One);
 }
 
-/*
-type CountResult = [{ count: string }];
-
-export const count: CountSignatures = async function
-  (client: Queryable, table: Table, where: Whereable = {}, options: SelectOptions = {}): Promise<number> {
-
-  const rows = await select(client, table as any, where as any, options as any, true) as unknown as CountResult;
-  return Number(rows[0].count);
+export const count: CountSignatures = function (
+  table: Table,
+  where: Whereable | SQLFragment | AllType = all,
+) {
+  return select(<any>table, <any>where, {}, SelectResultMode.Count);
 }
-*/
+
 
 // === transactions support ===
 
