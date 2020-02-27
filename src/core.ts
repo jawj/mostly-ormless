@@ -208,7 +208,7 @@ export const select: SelectSignatures = function (
       const
         subName = raw(`"cj_${k}"`),  // may need a suffix counter to distinguish depth?
         subQ = options.lateral![k];
-      subQ.parentTable = table;
+      subQ.parentTable = table;  // enables db.parent('column') in nested query Wherables
       return sql<SQL>` CROSS JOIN LATERAL (${subQ}) ${subName}`;
     });
 
@@ -364,7 +364,7 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
 
   compileExpression(expression: SQL, result: SQLResultType = { text: '', values: [] }, parentTable?: Table, currentColumn?: Column) {
     if (this.parentTable) parentTable = this.parentTable;
-    
+
     if (expression instanceof SQLFragment) {
       // another SQL fragment? recursively compile this one
       expression.compile(result, parentTable, currentColumn);

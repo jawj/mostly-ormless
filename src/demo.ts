@@ -114,7 +114,7 @@ import * as s from "./schema";
     });
     const r = await q.run(db.pool);
     console.dir(r, { depth: null });
-    console.log(r.map(b => b.author!.booksWritten));
+    console.log(r.map(b => b.author?.booksWritten));
 
     const one = await db.selectOne('books', db.all, { limit: 1 }).run(db.pool);
     console.log(one);
