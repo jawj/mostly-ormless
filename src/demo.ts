@@ -121,7 +121,7 @@ import * as s from "./schema";
     const count = await db.count('books', db.all, { columns: ['title'] }).run(db.pool);
     console.log(count);
   })();
-/*
+
   await (async () => {
     console.log('\n=== One-to-many join (each author with their many books) ===\n');
 
@@ -142,7 +142,7 @@ import * as s from "./schema";
 
     console.dir(authorBooks, { depth: null });
   })();
-*/
+
   await (async () => {
     console.log('\n=== Alternative one-to-many join (using LATERAL) ===\n');
 
@@ -172,10 +172,10 @@ import * as s from "./schema";
     const r = await q.run(db.pool);
     console.dir(r, { depth: null });
 
-    // console.log(r[0].books[0].title);
+    console.log(r[0].books[0].title);
 
   })();
-/*
+
   await (async () => {
     console.log('\n=== Two-level one-to-many join (using LATERAL) ===\n');
 
@@ -219,27 +219,27 @@ import * as s from "./schema";
     
     const
       authorId = 123,
-      existingBooks = await db.select(db.pool, "books", { authorId });
+      existingBooks = await db.select("books", { authorId }).run(db.pool);
     
     console.log(existingBooks);
 
-    const allBookTitles = await db.select(db.pool, "books", undefined, { columns: ['title'] });
+    const allBookTitles = await db.select("books", db.all, { columns: ['title'] }).run(db.pool);
     
     console.log(allBookTitles);
 
-    const lastButOneBook = await db.selectOne(db.pool, "books", { authorId }, {
+    const lastButOneBook = await db.selectOne("books", { authorId }, {
       order: [{ by: "createdAt", direction: "DESC" }], offset: 1
-    });
+    }).run(db.pool);
 
     console.log(lastButOneBook);
 
-    const savedBooks = await db.insert(db.pool, "books", [{
+    const savedBooks = await db.insert("books", [{
       authorId: 123,
       title: "One Hundred Years of Solitude",
     }, {
       authorId: 456,
       title: "Cheerio, and Thanks for All the Fish",
-    }]);
+      }]).run(db.pool);
     
     console.log(savedBooks);
 
@@ -247,10 +247,10 @@ import * as s from "./schema";
       fishBookId = savedBooks[1].id,
       properTitle = "So Long, and Thanks for All the Fish",
 
-      [updatedBook] = await db.update(db.pool, "books",
+      [updatedBook] = await db.update("books",
         { title: properTitle },
         { id: fishBookId }
-      );
+      ).run(db.pool);
     
     console.log(updatedBook);
   })();
@@ -260,23 +260,23 @@ import * as s from "./schema";
 
     const email = "me@privacy.net";
 
-    await db.insert(db.pool, "emailAuthentication", { email });
+    await db.insert("emailAuthentication", { email }).run(db.pool);
 
-    await db.update(db.pool, "emailAuthentication", {
+    await db.update("emailAuthentication", {
       consecutiveFailedLogins: db.sql`${db.self} + 1`,
       lastFailedLogin: db.sql`now()`,
-    }, { email });
+    }, { email }).run(db.pool);
   })();
 
   await (async () => {
     console.log('\n=== Shortcut UPSERT ===\n');
 
-    await db.insert(db.pool, "appleTransactions", {
+    await db.insert("appleTransactions", {
       environment: 'PROD',
       originalTransactionId: '123456',
       accountId: 123,
       latestReceiptData: "5Ia+DmVgPHh8wigA",
-    });
+    }).run(db.pool);
 
     const
       newTransactions: s.appleTransactions.Insertable[] = [{
@@ -302,20 +302,20 @@ import * as s from "./schema";
       email = "me@privacy.net",
       result = await db.transaction(db.Isolation.Serializable, async txnClient => {
 
-        const emailAuth = await db.selectOne(txnClient, "emailAuthentication", { email });
+        // const emailAuth = await db.selectOne("emailAuthentication", { email }).run(txnClient);
         
         // do stuff with email record -- e.g. check a password, handle successful login --
         // but remember everything non-DB-related in this function must be idempotent
         // since it might be called several times if there are serialization failures
         
-        return db.update(txnClient, "emailAuthentication", {
+        return db.update("emailAuthentication", {
           consecutiveFailedLogins: db.sql`${db.self} + 1`,
           lastFailedLogin: db.sql`now()`,
-        }, { email });
+        }, { email }).run(txnClient);
       });
     
     console.log(result);
   })();
-*/
+
   await db.pool.end();
 })();

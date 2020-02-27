@@ -119,16 +119,16 @@ export const upsert: UpsertSignatures = async function
   return Array.isArray(completedValues) ? rows : rows[0];
 }
 
-export const update: UpdateSignatures = async function
-  (client: Queryable, table: Table, values: Updatable, where: Whereable): Promise<any[]> {
+export const update: UpdateSignatures = function (
+  table: Table,
+  values: Updatable,
+  where: Whereable | SQLFragment): SQLFragment {
 
   // note: the ROW() constructor below is required in Postgres 10+ if we're updating a single column
   // more info: https://www.postgresql-archive.org/Possible-regression-in-UPDATE-SET-lt-column-list-gt-lt-row-expression-gt-with-just-one-single-column0-td5989074.html
-  const
-    query = sql<SQL>`UPDATE ${table} SET (${cols(values)}) = ROW(${vals(values)}) WHERE ${where} RETURNING *`,
-    rows = await query.run(client);
 
-  return rows;
+  const query = sql<SQL>`UPDATE ${table} SET (${cols(values)}) = ROW(${vals(values)}) WHERE ${where} RETURNING *`;
+  return query;
 }
 
 // the 'where' argument is not optional on delete because (a) you don't want to wipe your table 

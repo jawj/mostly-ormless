@@ -245,11 +245,11 @@ export interface UpsertSignatures {
     (client: Queryable, table: tags.Table, values: tags.Insertable[], uniqueCols: tags.Column | tags.Column[], noNullUpdateCols?: tags.Column | tags.Column[]): Promise<tags.UpsertReturnable[]>;
 }
 export interface UpdateSignatures {
-    (client: Queryable, table: appleTransactions.Table, values: appleTransactions.Updatable, where: appleTransactions.Whereable): Promise<appleTransactions.Selectable[]>;
-    (client: Queryable, table: authors.Table, values: authors.Updatable, where: authors.Whereable): Promise<authors.Selectable[]>;
-    (client: Queryable, table: books.Table, values: books.Updatable, where: books.Whereable): Promise<books.Selectable[]>;
-    (client: Queryable, table: emailAuthentication.Table, values: emailAuthentication.Updatable, where: emailAuthentication.Whereable): Promise<emailAuthentication.Selectable[]>;
-    (client: Queryable, table: tags.Table, values: tags.Updatable, where: tags.Whereable): Promise<tags.Selectable[]>;
+    //(client: Queryable, table: appleTransactions.Table, values: appleTransactions.Updatable, where: appleTransactions.Whereable): Promise<appleTransactions.Selectable[]>;
+    (table: authors.Table, values: authors.Updatable, where: authors.Whereable | SQLFragment): SQLFragment<authors.Selectable[]>;
+    (table: books.Table, values: books.Updatable, where: books.Whereable | SQLFragment): SQLFragment<books.Selectable[]>;
+    (table: emailAuthentication.Table, values: emailAuthentication.Updatable, where: emailAuthentication.Whereable | SQLFragment): SQLFragment<emailAuthentication.Selectable[]>;
+    // (client: Queryable, table: tags.Table, values: tags.Updatable, where: tags.Whereable): Promise<tags.Selectable[]>;
 }
 export interface DeleteSignatures {
     (client: Queryable, table: appleTransactions.Table, where: appleTransactions.Whereable): Promise<appleTransactions.Selectable[]>;
