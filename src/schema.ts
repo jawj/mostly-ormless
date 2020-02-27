@@ -174,12 +174,19 @@ export namespace emailAuthentication {
         direction: 'ASC' | 'DESC',
         nulls?: 'FIRST' | 'LAST',
     }
-    export interface SelectOptions<C extends readonly Column[] > {
+    export interface SelectOptions<C extends Column[], L extends SQLFragmentsMap> {
         order?: OrderSpec[];
         limit?: number,
         offset?: number,
         columns?: C,
+        lateral?: L,
     }
+    type BaseSelectReturnType<C extends Column[]> = C extends undefined ? Selectable : OnlyCols<C>;
+    type WithLateralSelectReturnType<C extends Column[], L extends SQLFragmentsMap> =
+        L extends undefined ? BaseSelectReturnType<C> : BaseSelectReturnType<C> & PromisedSQLFragmentReturnTypeMap<L>;
+    export type FullSelectReturnType<C extends Column[], L extends SQLFragmentsMap, M extends SelectResultMode> =
+        M extends SelectResultMode.Many ? WithLateralSelectReturnType<C, L>[] :
+        M extends SelectResultMode.One ? WithLateralSelectReturnType<C, L> | undefined : number;
 }
 
 export namespace tags {
@@ -294,6 +301,12 @@ export interface SelectOneSignatures {
         where: authors.Whereable | SQLFragment | AllType,
         options?: authors.SelectOptions<C, L>,
     ): SQLFragment<authors.FullSelectReturnType<C, L, SelectResultMode.One>>;
+
+    <C extends emailAuthentication.Column[], L extends SQLFragmentsMap>(
+        table: emailAuthentication.Table,
+        where: emailAuthentication.Whereable | SQLFragment | AllType,
+        options?: emailAuthentication.SelectOptions<C, L>,
+    ): SQLFragment<emailAuthentication.FullSelectReturnType<C, L, SelectResultMode.One>>;
     
     /*
     <T extends readonly appleTransactions.Column[]> (client: Queryable, table: appleTransactions.Table, where ?: appleTransactions.Whereable, options ?: appleTransactions.SelectOptions<T>): Promise<(T extends undefined ? appleTransactions.Selectable : appleTransactions.OnlyCols<T>) | undefined>;

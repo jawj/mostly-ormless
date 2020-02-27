@@ -305,8 +305,9 @@ import * as s from "./schema";
       email = "me@privacy.net",
       result = await db.transaction(db.Isolation.Serializable, async txnClient => {
 
-        // const emailAuth = await db.selectOne("emailAuthentication", { email }).run(txnClient);
-        
+        const emailAuth = await db.selectOne("emailAuthentication", { email }).run(txnClient);
+        console.log(emailAuth?.consecutiveFailedLogins);
+
         // do stuff with email record -- e.g. check a password, handle successful login --
         // but remember everything non-DB-related in this function must be idempotent
         // since it might be called several times if there are serialization failures
