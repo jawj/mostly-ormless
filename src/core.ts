@@ -71,8 +71,8 @@ export type PromisedSQLFragmentReturnTypeMap<L extends SQLFragmentsMap> = { [K i
 
 export type Queryable = pg.Pool | PoolClient<any>;
 
-export const insert: InsertSignatures = async function
-  (client: Queryable, table: Table, values: Insertable | Insertable[]): Promise<any> {
+export const insert: InsertSignatures = function
+  (table: Table, values: Insertable | Insertable[]): SQLFragment<any> {
 
   const
     completedValues = Array.isArray(values) ? completeKeysWithDefault(values) : values,
@@ -80,10 +80,10 @@ export const insert: InsertSignatures = async function
     valuesSQL = Array.isArray(completedValues) ?
       mapWithSeparator(completedValues as Insertable[], sql<SQL>`, `, v => sql<SQL>`(${vals(v)})`) :
       sql<SQL>`(${vals(completedValues)})`,
-    query = sql<SQL>`INSERT INTO ${table} (${colsSQL}) VALUES ${valuesSQL} RETURNING *`,
-    rows = await query.run(client);
+    query = sql<SQL>`INSERT INTO ${table} (${colsSQL}) VALUES ${valuesSQL} RETURNING *`;
 
-  return Array.isArray(completedValues) ? rows : rows[0];
+  if (!Array.isArray(completedValues)) query.transformRunResult = (qr) => qr.rows[0];
+  return query;
 }
 
 

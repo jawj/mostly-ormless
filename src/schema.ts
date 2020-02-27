@@ -221,16 +221,16 @@ export type Column = appleTransactions.Column | authors.Column | books.Column | 
 export type AllTables = [appleTransactions.Table, authors.Table, books.Table, emailAuthentication.Table, tags.Table];
 
 export interface InsertSignatures {
-    (client: Queryable, table: appleTransactions.Table, values: appleTransactions.Insertable): Promise<appleTransactions.Selectable>;
-    (client: Queryable, table: appleTransactions.Table, values: appleTransactions.Insertable[]): Promise<appleTransactions.Selectable[]>;
-    (client: Queryable, table: authors.Table, values: authors.Insertable): Promise<authors.Selectable>;
-    (client: Queryable, table: authors.Table, values: authors.Insertable[]): Promise<authors.Selectable[]>;
-    (client: Queryable, table: books.Table, values: books.Insertable): Promise<books.Selectable>;
-    (client: Queryable, table: books.Table, values: books.Insertable[]): Promise<books.Selectable[]>;
-    (client: Queryable, table: emailAuthentication.Table, values: emailAuthentication.Insertable): Promise<emailAuthentication.Selectable>;
-    (client: Queryable, table: emailAuthentication.Table, values: emailAuthentication.Insertable[]): Promise<emailAuthentication.Selectable[]>;
-    (client: Queryable, table: tags.Table, values: tags.Insertable): Promise<tags.Selectable>;
-    (client: Queryable, table: tags.Table, values: tags.Insertable[]): Promise<tags.Selectable[]>;
+    (table: appleTransactions.Table, values: appleTransactions.Insertable): SQLFragment<appleTransactions.Selectable>;
+    (table: appleTransactions.Table, values: appleTransactions.Insertable[]): SQLFragment<appleTransactions.Selectable[]>;
+    (table: authors.Table, values: authors.Insertable): SQLFragment<authors.Selectable>;
+    (table: authors.Table, values: authors.Insertable[]): SQLFragment<authors.Selectable[]>;
+    (table: books.Table, values: books.Insertable): SQLFragment<books.Selectable>;
+    (table: books.Table, values: books.Insertable[]): SQLFragment<books.Selectable[]>;
+    (table: emailAuthentication.Table, values: emailAuthentication.Insertable): SQLFragment<emailAuthentication.Selectable>;
+    (table: emailAuthentication.Table, values: emailAuthentication.Insertable[]): SQLFragment<emailAuthentication.Selectable[]>;
+    (table: tags.Table, values: tags.Insertable): SQLFragment<tags.Selectable>;
+    (table: tags.Table, values: tags.Insertable[]): SQLFragment<tags.Selectable[]>;
 }
 export interface UpsertSignatures {
     (client: Queryable, table: appleTransactions.Table, values: appleTransactions.Insertable, uniqueCols: appleTransactions.Column | appleTransactions.Column[], noNullUpdateCols?: appleTransactions.Column | appleTransactions.Column[]): Promise<appleTransactions.UpsertReturnable>;

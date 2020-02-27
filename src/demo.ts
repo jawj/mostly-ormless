@@ -9,7 +9,7 @@ import * as s from "./schema";
     const allTables: s.AllTables = ["appleTransactions", "authors", "books", "emailAuthentication", "tags"];
     await db.truncate(allTables, "CASCADE").run(db.pool);
 
-    await db.insert(db.pool, "authors", [
+    await db.insert("authors", [
       {
         id: 1,
         name: "Jane Austen",
@@ -23,9 +23,9 @@ import * as s from "./schema";
         name: "Douglas Adams",
         isLiving: false,
       }
-    ]);
+    ]).run(db.pool);
     
-    const insertedBooks = await db.insert(db.pool, "books", [
+    const insertedBooks = await db.insert("books", [
       {
         authorId: 1,
         title: "Pride and Prejudice",
@@ -33,12 +33,12 @@ import * as s from "./schema";
         authorId: 123,
         title: "Love in the Time of Cholera"
       }
-    ]);
+    ]).run(db.pool);
 
-    db.insert(db.pool, "tags", [
+    await db.insert("tags", [
       { tag: "Spanish", bookId: insertedBooks[1].id },
       { tag: "1980s", bookId: insertedBooks[1].id },
-    ]);
+    ]).run(db.pool);
 
   })();
 
