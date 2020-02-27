@@ -351,7 +351,9 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
     return this.runResultTransform(qr);
   }
 
-  compile(result: SQLResultType = { text: '', values: [] }, parentTable: Table | undefined = this.parentTable, currentColumn?: Column, ) {
+  compile(result: SQLResultType = { text: '', values: [] }, parentTable?: Table, currentColumn?: Column, ) {
+    if (this.parentTable) parentTable = this.parentTable;
+
     result.text += this.literals[0];
     for (let i = 1, len = this.literals.length; i < len; i++) {
       this.compileExpression(this.expressions[i - 1], result, parentTable, currentColumn);
@@ -360,8 +362,9 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
     return result;
   }
 
-  compileExpression(expression: SQL, result: SQLResultType = { text: '', values: [] }, parentTable: Table | undefined = this.parentTable, currentColumn?: Column) {
-
+  compileExpression(expression: SQL, result: SQLResultType = { text: '', values: [] }, parentTable?: Table, currentColumn?: Column) {
+    if (this.parentTable) parentTable = this.parentTable;
+    
     if (expression instanceof SQLFragment) {
       // another SQL fragment? recursively compile this one
       expression.compile(result, parentTable, currentColumn);
@@ -375,7 +378,7 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
       result.text += expression.value;
 
     } else if (Array.isArray(expression)) {
-      // an array's elements are compiled one by one
+      // an array's elements are compiled one by one -- note that an empty array can be used as a non-value
       for (let i = 0, len = expression.length; i < len; i++) this.compileExpression(expression[i], result, parentTable, currentColumn);
 
     } else if (expression instanceof Parameter) {

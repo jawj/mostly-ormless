@@ -106,15 +106,15 @@ import * as s from "./schema";
     const q = await db.select('books', db.all, {
       columns: ['title'],
       lateral: {
-        author: db.selectOne('authors', db.sql`${"authors"}.${"id"} = ${"books"}.${"authorId"}`, {
+        author: db.selectOne('authors', { id: db.parent('authorId') }, {
           columns: ['name', 'isLiving'],
-          lateral: { booksCount: db.count('books', db.sql`${"books"}.${"authorId"} = ${"authors"}.${"id"}`) }
+          lateral: { booksWritten: db.count('books', { authorId: db.parent('id') }) }
         })
       }
     });
     const r = await q.run(db.pool);
     console.dir(r, { depth: null });
-    console.log(r.map(b => b.author!.booksCount));
+    console.log(r.map(b => b.author!.booksWritten));
 
     const one = await db.selectOne('books', db.all, { limit: 1 }).run(db.pool);
     console.log(one);
@@ -166,19 +166,13 @@ import * as s from "./schema";
 
     const q = await db.select('authors', db.all, {
       lateral: {
-        books: db.select('books', db.sql`${"books"}.${"authorId"} = ${"authors"}.${"id"}`)
+        books: db.select('books', { authorId: db.parent('id') })
       }
     });
     const r = await q.run(db.pool);
     console.dir(r, { depth: null });
 
     console.log(r[0].books[0].title);
-
-    const r2 = await db.select('authors', db.all, {
-      lateral: { books: db.select('books', { authorId: db.parent('id') }) }
-    }).run(db.pool);
-
-    console.dir(r2, { depth: null });
   })();
 
   await (async () => {
