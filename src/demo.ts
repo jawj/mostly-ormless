@@ -253,6 +253,9 @@ import * as s from "./schema";
       ).run(db.pool);
     
     console.log(updatedBook);
+
+    const deleted = await db.deletes('books', { id: fishBookId }).run(db.pool);
+    console.log(deleted);
   })();
 
   await (async () => {

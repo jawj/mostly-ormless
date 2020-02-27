@@ -131,16 +131,11 @@ export const update: UpdateSignatures = function (
   return query;
 }
 
-// the 'where' argument is not optional on delete because (a) you don't want to wipe your table 
-// by forgetting it, and (b) if you do want to wipe your table, maybe use truncate?
-export const deletes: DeleteSignatures = async function  // sadly, delete is a reserved word
-  (client: Queryable, table: Table, where: Whereable): Promise<any[]> {
+export const deletes: DeleteSignatures = function  // sadly, delete is a reserved word
+  (table: Table, where: Whereable | SQLFragment): SQLFragment<any[]> {
 
-  const
-    query = sql<SQL>`DELETE FROM ${table} WHERE ${where} RETURNING *`,
-    rows = await query.run(client);
-
-  return rows;
+  const query = sql<SQL>`DELETE FROM ${table} WHERE ${where} RETURNING *`;
+  return query;
 }
 
 type TruncateIdentityOpts = 'CONTINUE IDENTITY' | 'RESTART IDENTITY';
