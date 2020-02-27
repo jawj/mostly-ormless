@@ -233,16 +233,16 @@ export interface InsertSignatures {
     (table: tags.Table, values: tags.Insertable[]): SQLFragment<tags.Selectable[]>;
 }
 export interface UpsertSignatures {
-    (client: Queryable, table: appleTransactions.Table, values: appleTransactions.Insertable, uniqueCols: appleTransactions.Column | appleTransactions.Column[], noNullUpdateCols?: appleTransactions.Column | appleTransactions.Column[]): Promise<appleTransactions.UpsertReturnable>;
-    (client: Queryable, table: appleTransactions.Table, values: appleTransactions.Insertable[], uniqueCols: appleTransactions.Column | appleTransactions.Column[], noNullUpdateCols?: appleTransactions.Column | appleTransactions.Column[]): Promise<appleTransactions.UpsertReturnable[]>;
-    (client: Queryable, table: authors.Table, values: authors.Insertable, uniqueCols: authors.Column | authors.Column[], noNullUpdateCols?: authors.Column | authors.Column[]): Promise<authors.UpsertReturnable>;
-    (client: Queryable, table: authors.Table, values: authors.Insertable[], uniqueCols: authors.Column | authors.Column[], noNullUpdateCols?: authors.Column | authors.Column[]): Promise<authors.UpsertReturnable[]>;
-    (client: Queryable, table: books.Table, values: books.Insertable, uniqueCols: books.Column | books.Column[], noNullUpdateCols?: books.Column | books.Column[]): Promise<books.UpsertReturnable>;
-    (client: Queryable, table: books.Table, values: books.Insertable[], uniqueCols: books.Column | books.Column[], noNullUpdateCols?: books.Column | books.Column[]): Promise<books.UpsertReturnable[]>;
-    (client: Queryable, table: emailAuthentication.Table, values: emailAuthentication.Insertable, uniqueCols: emailAuthentication.Column | emailAuthentication.Column[], noNullUpdateCols?: emailAuthentication.Column | emailAuthentication.Column[]): Promise<emailAuthentication.UpsertReturnable>;
-    (client: Queryable, table: emailAuthentication.Table, values: emailAuthentication.Insertable[], uniqueCols: emailAuthentication.Column | emailAuthentication.Column[], noNullUpdateCols?: emailAuthentication.Column | emailAuthentication.Column[]): Promise<emailAuthentication.UpsertReturnable[]>;
-    (client: Queryable, table: tags.Table, values: tags.Insertable, uniqueCols: tags.Column | tags.Column[], noNullUpdateCols?: tags.Column | tags.Column[]): Promise<tags.UpsertReturnable>;
-    (client: Queryable, table: tags.Table, values: tags.Insertable[], uniqueCols: tags.Column | tags.Column[], noNullUpdateCols?: tags.Column | tags.Column[]): Promise<tags.UpsertReturnable[]>;
+    (table: appleTransactions.Table, values: appleTransactions.Insertable, uniqueCols: appleTransactions.Column | appleTransactions.Column[], noNullUpdateCols?: appleTransactions.Column | appleTransactions.Column[]): SQLFragment<appleTransactions.UpsertReturnable>;
+    (table: appleTransactions.Table, values: appleTransactions.Insertable[], uniqueCols: appleTransactions.Column | appleTransactions.Column[], noNullUpdateCols?: appleTransactions.Column | appleTransactions.Column[]): SQLFragment<appleTransactions.UpsertReturnable[]>;
+    (table: authors.Table, values: authors.Insertable, uniqueCols: authors.Column | authors.Column[], noNullUpdateCols?: authors.Column | authors.Column[]): SQLFragment<authors.UpsertReturnable>;
+    (table: authors.Table, values: authors.Insertable[], uniqueCols: authors.Column | authors.Column[], noNullUpdateCols?: authors.Column | authors.Column[]): SQLFragment<authors.UpsertReturnable[]>;
+    (table: books.Table, values: books.Insertable, uniqueCols: books.Column | books.Column[], noNullUpdateCols?: books.Column | books.Column[]): SQLFragment<books.UpsertReturnable>;
+    (table: books.Table, values: books.Insertable[], uniqueCols: books.Column | books.Column[], noNullUpdateCols?: books.Column | books.Column[]): SQLFragment<books.UpsertReturnable[]>;
+    (table: emailAuthentication.Table, values: emailAuthentication.Insertable, uniqueCols: emailAuthentication.Column | emailAuthentication.Column[], noNullUpdateCols?: emailAuthentication.Column | emailAuthentication.Column[]): SQLFragment<emailAuthentication.UpsertReturnable>;
+    (table: emailAuthentication.Table, values: emailAuthentication.Insertable[], uniqueCols: emailAuthentication.Column | emailAuthentication.Column[], noNullUpdateCols?: emailAuthentication.Column | emailAuthentication.Column[]): SQLFragment<emailAuthentication.UpsertReturnable[]>;
+    /* (client: Queryable, table: tags.Table, values: tags.Insertable, uniqueCols: tags.Column | tags.Column[], noNullUpdateCols?: tags.Column | tags.Column[]): Promise<tags.UpsertReturnable>;
+    (client: Queryable, table: tags.Table, values: tags.Insertable[], uniqueCols: tags.Column | tags.Column[], noNullUpdateCols?: tags.Column | tags.Column[]): Promise<tags.UpsertReturnable[]>; */
 }
 export interface UpdateSignatures {
     //(client: Queryable, table: appleTransactions.Table, values: appleTransactions.Updatable, where: appleTransactions.Whereable): Promise<appleTransactions.Selectable[]>;

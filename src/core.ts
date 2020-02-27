@@ -89,8 +89,8 @@ export const insert: InsertSignatures = function
 
 export interface UpsertAction { $action: 'INSERT' | 'UPDATE' };
 
-export const upsert: UpsertSignatures = async function
-  (client: Queryable, table: Table, values: Insertable | Insertable[], uniqueCols: Column | Column[], noNullUpdateCols: Column | Column[] = []): Promise<any> {
+export const upsert: UpsertSignatures = function
+  (table: Table, values: Insertable | Insertable[], uniqueCols: Column | Column[], noNullUpdateCols: Column | Column[] = []): SQLFragment<any> {
 
   if (!Array.isArray(uniqueCols)) uniqueCols = [uniqueCols];
   if (!Array.isArray(noNullUpdateCols)) noNullUpdateCols = [noNullUpdateCols];
@@ -113,10 +113,8 @@ export const upsert: UpsertSignatures = async function
 
   const query = sql<SQL>`INSERT INTO ${table} (${colsSQL}) VALUES ${valuesSQL} ON CONFLICT (${uniqueColsSQL}) DO UPDATE SET (${updateColsSQL}) = ROW(${updateValuesSQL}) RETURNING *, CASE xmax WHEN 0 THEN 'INSERT' ELSE 'UPDATE' END AS "$action"`;
 
-  // console.log(query.compile());
-  const rows = await query.run(client);
-
-  return Array.isArray(completedValues) ? rows : rows[0];
+  if (!Array.isArray(completedValues)) query.transformRunResult = (qr) => qr.rows[0];
+  return query;
 }
 
 export const update: UpdateSignatures = function (
@@ -132,7 +130,7 @@ export const update: UpdateSignatures = function (
 }
 
 export const deletes: DeleteSignatures = function  // sadly, delete is a reserved word
-  (table: Table, where: Whereable | SQLFragment): SQLFragment<any[]> {
+  (table: Table, where: Whereable | SQLFragment): SQLFragment {
 
   const query = sql<SQL>`DELETE FROM ${table} WHERE ${where} RETURNING *`;
   return query;
@@ -223,8 +221,8 @@ export const selectOne: SelectOneSignatures = function (
   options: SelectOptions = {},
 ) {
   // you might argue that 'selectOne' offers little that you can't get with destructuring assignment 
-  // and plain 'select' -- i.e. let [x] = select(...) -- but a thing that is definitely worth having 
-  // is '| undefined' in the return signature, because the result of indexing never includes undefined
+  // and plain 'select' -- e.g. let [x] = async select(...).run(pool); -- but a thing that is definitely worth 
+  // having is '| undefined' in the return signature, because the result of indexing never includes undefined
   // (see e.g. https://github.com/Microsoft/TypeScript/issues/13778)
   
   return select(<any>table, <any>where, <any>options, SelectResultMode.One);
@@ -235,6 +233,7 @@ export const count: CountSignatures = function (
   where: Whereable | SQLFragment | AllType = all,
   options?: { columns: Column[] },
 ) {
+  
   return select(<any>table, <any>where, <any>options, SelectResultMode.Count);
 }
 

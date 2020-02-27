@@ -293,8 +293,8 @@ import * as s from "./schema";
         accountId: 234,
         latestReceiptData: "bmd1aXNoZWQsIG5v",
       }],
-      result = await db.upsert(db.pool, "appleTransactions", newTransactions,
-        ["environment", "originalTransactionId"]);
+      result = await db.upsert("appleTransactions", newTransactions,
+        ["environment", "originalTransactionId"]).run(db.pool);
 
     console.log(result);
   })();
