@@ -198,6 +198,20 @@ import * as s from "./schema";
       authorBookTags: authorBookTagsSelectable[] = await query.run(db.pool);
 
     console.dir(authorBookTags, { depth: null });
+
+    const abt = await db.select('authors', db.all, {
+      lateral: {
+        books: db.select('books', { authorId: db.parent('id') }, {
+          lateral: {
+            tags: db.select('tags', { bookId: db.parent('id') })
+          }
+        })
+      }
+    }).run(db.pool);
+
+    console.dir(abt, { depth: null });
+    abt.map(a => a.books.map(b => b.tags.map(t => t.tag)));
+
   })();
 
   await (async () => {
