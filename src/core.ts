@@ -56,16 +56,15 @@ export class ColumnValues<T> { constructor(public value: T) { } }
 export function vals<T>(x: T) { return new ColumnValues<T>(x); }
 
 
-export type GenericSQLExpression = SQLFragment | Parameter | DefaultType | DangerousRawString | SelfType;
+export type GenericSQLExpression = SQLFragment<any> | Parameter | DefaultType | DangerousRawString | SelfType;
 export type SQLExpression = Table | ColumnNames<Updatable | (keyof Updatable)[]> | ColumnValues<Updatable> | Whereable | Column | GenericSQLExpression;
 export type SQL = SQLExpression | SQLExpression[];
 
 
-export interface Runnable { run: (...args: any) => any };
-export interface RunnablesMap { [k: string]: Runnable };
+export interface SQLFragmentsMap { [k: string]: SQLFragment<any> };
 export type PromisedType<P> = P extends Promise<infer U> ? U : never;
-export type PromisedRunnableReturnType<R extends Runnable> = PromisedType<ReturnType<R['run']>>;
-export type PromisedRunnableReturnTypeMap<L extends RunnablesMap> = { [K in keyof L]: PromisedRunnableReturnType<L[K]> };
+export type PromisedSQLFragmentReturnType<R extends SQLFragment<any>> = PromisedType<ReturnType<R['run']>>;
+export type PromisedSQLFragmentReturnTypeMap<L extends SQLFragmentsMap> = { [K in keyof L]: PromisedSQLFragmentReturnType<L[K]> };
 
 
 // === simple query helpers ===
@@ -148,21 +147,20 @@ type TruncateIdentityOpts = 'CONTINUE IDENTITY' | 'RESTART IDENTITY';
 type TruncateForeignKeyOpts = 'RESTRICT' | 'CASCADE';
 
 interface TruncateSignatures {
-  (client: Queryable, table: Table | Table[], optId: TruncateIdentityOpts): Promise<void>;
-  (client: Queryable, table: Table | Table[], optFK: TruncateForeignKeyOpts): Promise<void>;
-  (client: Queryable, table: Table | Table[], optId: TruncateIdentityOpts, optFK: TruncateForeignKeyOpts): Promise<void>;
+  (table: Table | Table[], optId: TruncateIdentityOpts): SQLFragment<undefined>;
+  (table: Table | Table[], optFK: TruncateForeignKeyOpts): SQLFragment<undefined>;
+  (table: Table | Table[], optId: TruncateIdentityOpts, optFK: TruncateForeignKeyOpts): SQLFragment<undefined>;
 }
 
-export const truncate: TruncateSignatures = async function
-  (client: Queryable, table: Table | Table[], ...opts: string[]): Promise<void> {
+export const truncate: TruncateSignatures = function
+  (table: Table | Table[], ...opts: string[]): SQLFragment<undefined> {
 
   if (!Array.isArray(table)) table = [table];
-
   const
     tables = mapWithSeparator(table, sql`, `, t => t),
-    query = sql<SQL>`TRUNCATE ${tables}${raw((opts.length ? ' ' : '') + opts.join(' '))}`;
-
-  await query.run(client);
+    query = sql<SQL, undefined>`TRUNCATE ${tables}${raw((opts.length ? ' ' : '') + opts.join(' '))}`;
+  
+  return query;
 }
 
 
@@ -183,9 +181,7 @@ interface SelectOptions {
   limit?: number,
   offset?: number,
   columns?: Column[],
-  lateral?: { [k: string]: ReturnType<typeof select>; }; // | ReturnType<typeof selectOne> },
-  // count?: boolean,  // for use by count
-  // one?: boolean,  // for use by selectOne
+  lateral?: SQLFragmentsMap;
 }
 
 export const select: SelectSignatures = function (
@@ -217,7 +213,7 @@ export const select: SelectSignatures = function (
       const
         subName = raw(`"cj_${k}"`),  // may need a suffix counter to distinguish depth?
         subQ = options.lateral![k];
-      return sql` CROSS JOIN LATERAL (${subQ}) ${subName}`;
+      return sql<SQL>` CROSS JOIN LATERAL (${subQ}) ${subName}`;
     });
 
   const query = sql<SQL>`SELECT ${aggColsSQL} AS result FROM ${table}${lateralSQL}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`;
@@ -226,31 +222,34 @@ export const select: SelectSignatures = function (
   return query;
 }
 
-// you might argue that 'selectOne' offers little that you can't get with destructuring assignment 
-// and plain 'select' -- i.e. let[x] = select(...) -- but a thing that is definitely worth having 
-// is '| undefined' in the return signature, because the result of indexing never includes undefined
-// (see e.g. https://github.com/Microsoft/TypeScript/issues/13778)
 export const selectOne: SelectOneSignatures = function (
   table: Table,
   where: Whereable | SQLFragment | AllType = all,
   options: SelectOptions = {},
 ) {
+  // you might argue that 'selectOne' offers little that you can't get with destructuring assignment 
+  // and plain 'select' -- i.e. let [x] = select(...) -- but a thing that is definitely worth having 
+  // is '| undefined' in the return signature, because the result of indexing never includes undefined
+  // (see e.g. https://github.com/Microsoft/TypeScript/issues/13778)
+  
   return select(<any>table, <any>where, <any>options, SelectResultMode.One);
 }
 
 export const count: CountSignatures = function (
   table: Table,
   where: Whereable | SQLFragment | AllType = all,
+  options?: { columns: Column[] },
 ) {
-  return select(<any>table, <any>where, {}, SelectResultMode.Count);
+  return select(<any>table, <any>where, <any>options, SelectResultMode.Count);
 }
 
 
 // === transactions support ===
 
-// these are the only meaningful values in Postgres: 
-// see https://www.postgresql.org/docs/11/sql-set-transaction.html
 export enum Isolation {
+  // these are the only meaningful values in Postgres: 
+  // see https://www.postgresql.org/docs/11/sql-set-transaction.html
+
   Serializable = "SERIALIZABLE",
   RepeatableRead = "REPEATABLE READ",
   ReadCommitted = "READ COMMITTED",
@@ -338,15 +337,14 @@ interface SQLResultType {
   values: any[];
 };
 
-export function sql<T = SQL>(literals: TemplateStringsArray, ...expressions: T[]) {
-  return new SQLFragment(Array.prototype.slice.apply(literals), expressions);
+export function sql<T = SQL, RunResult = pg.QueryResult['rows']>(literals: TemplateStringsArray, ...expressions: T[]) {
+  return new SQLFragment<RunResult>(Array.prototype.slice.apply(literals), expressions);
 }
 
-export class SQLFragment<RunResult extends any = any[]> {
+export class SQLFragment<RunResult = pg.QueryResult['rows']> {
+  transformRunResult: (qr: pg.QueryResult) => any = (qr) => qr.rows;  // default is to return the rows array
 
   constructor(private literals: string[], private expressions: SQLExpression[]) { }
-
-  transformRunResult: (qr: pg.QueryResult) => any = (qr) => qr.rows;  // default is to return array of rows
 
   async run(queryable: Queryable): Promise<RunResult> {
     const query = this.compile();

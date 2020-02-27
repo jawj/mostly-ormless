@@ -7,7 +7,7 @@ import * as s from "./schema";
     
     // setup (uses shortcut functions)
     const allTables: s.AllTables = ["appleTransactions", "authors", "books", "emailAuthentication", "tags"];
-    await db.truncate(db.pool, allTables, "CASCADE");
+    await db.truncate(allTables, "CASCADE").run(db.pool);
 
     await db.insert(db.pool, "authors", [
       {
@@ -118,6 +118,8 @@ import * as s from "./schema";
 
     const one = await db.selectOne('books', db.all, { limit: 1 }).run(db.pool);
     console.log(one);
+    const count = await db.count('books', db.all, { columns: ['title'] }).run(db.pool);
+    console.log(count);
   })();
 /*
   await (async () => {

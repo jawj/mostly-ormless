@@ -24,9 +24,9 @@ import {
     UpsertAction,
 	PromisedType,
     SelectResultMode,
-    RunnablesMap,
-    PromisedRunnableReturnType,
-    PromisedRunnableReturnTypeMap,
+    SQLFragmentsMap,
+    PromisedSQLFragmentReturnType,
+    PromisedSQLFragmentReturnTypeMap,
 } from "./core";
 
 export type appleEnvironment = 'PROD' | 'Sandbox';
@@ -92,7 +92,7 @@ export namespace authors {
         direction: 'ASC' | 'DESC',
         nulls?: 'FIRST' | 'LAST',
     }
-    export interface SelectOptions<C extends Column[], L extends RunnablesMap> {
+    export interface SelectOptions<C extends Column[], L extends SQLFragmentsMap> {
         order?: OrderSpec[];
         limit?: number,
         offset?: number,
@@ -100,12 +100,11 @@ export namespace authors {
         lateral?: L,
     }
     type BaseSelectReturnType<C extends Column[]> = C extends undefined ? Selectable : OnlyCols<C>;
-    type WithLateralSelectReturnType<C extends Column[], L extends RunnablesMap> =
-        L extends undefined ? BaseSelectReturnType<C> : BaseSelectReturnType<C> & PromisedRunnableReturnTypeMap<L>;
-    export type FullSelectReturnType<C extends Column[], L extends RunnablesMap, M extends SelectResultMode> =
+    type WithLateralSelectReturnType<C extends Column[], L extends SQLFragmentsMap> =
+        L extends undefined ? BaseSelectReturnType<C> : BaseSelectReturnType<C> & PromisedSQLFragmentReturnTypeMap<L>;
+    export type FullSelectReturnType<C extends Column[], L extends SQLFragmentsMap, M extends SelectResultMode> =
         M extends SelectResultMode.Many ? WithLateralSelectReturnType<C, L>[] :
-        M extends SelectResultMode.One ? undefined | WithLateralSelectReturnType<C, L> :
-        M extends SelectResultMode.Count ? number : never;
+        M extends SelectResultMode.One ? WithLateralSelectReturnType<C, L> | undefined : number;
 }
 
 export namespace books {
@@ -136,7 +135,7 @@ export namespace books {
         direction: 'ASC' | 'DESC',
         nulls?: 'FIRST' | 'LAST',
     }
-    export interface SelectOptions<C extends Column[], L extends RunnablesMap> {
+    export interface SelectOptions<C extends Column[], L extends SQLFragmentsMap> {
         order?: OrderSpec[];
         limit?: number,
         offset?: number,
@@ -144,11 +143,11 @@ export namespace books {
         lateral?: L,
     }
     type BaseSelectReturnType<C extends Column[]> = C extends undefined ? Selectable : OnlyCols<C>;
-    type WithLateralSelectReturnType<C extends Column[], L extends RunnablesMap> =
-        L extends undefined ? BaseSelectReturnType<C> : BaseSelectReturnType<C> & PromisedRunnableReturnTypeMap<L>;
-    export type FullSelectReturnType<C extends Column[], L extends RunnablesMap, M extends SelectResultMode> =
+    type WithLateralSelectReturnType<C extends Column[], L extends SQLFragmentsMap> =
+        L extends undefined ? BaseSelectReturnType<C> : BaseSelectReturnType<C> & PromisedSQLFragmentReturnTypeMap<L>;
+    export type FullSelectReturnType<C extends Column[], L extends SQLFragmentsMap, M extends SelectResultMode> =
         M extends SelectResultMode.Many ? WithLateralSelectReturnType<C, L>[] :
-        M extends SelectResultMode.One ? undefined | WithLateralSelectReturnType<C, L>: number;
+        M extends SelectResultMode.One ? WithLateralSelectReturnType<C, L> | undefined : number;
 }
 
 export namespace emailAuthentication {
@@ -262,14 +261,14 @@ export interface DeleteSignatures {
 
 
 export interface SelectSignatures {
-    <C extends books.Column[], L extends RunnablesMap, M extends SelectResultMode = SelectResultMode.Many>(
+    <C extends books.Column[], L extends SQLFragmentsMap, M extends SelectResultMode = SelectResultMode.Many>(
         table: books.Table,
         where: books.Whereable | SQLFragment | AllType,
         options?: books.SelectOptions<C, L>,
         mode?: M,
     ): SQLFragment<books.FullSelectReturnType<C, L, M>>; 
     
-    <C extends authors.Column[], L extends RunnablesMap, M extends SelectResultMode = SelectResultMode.Many>(
+    <C extends authors.Column[], L extends SQLFragmentsMap, M extends SelectResultMode = SelectResultMode.Many>(
         table: authors.Table,
         where: authors.Whereable | SQLFragment | AllType,
         options?: authors.SelectOptions<C, L>,
@@ -284,13 +283,13 @@ export interface SelectSignatures {
 */
       }
 export interface SelectOneSignatures {
-    <C extends books.Column[], L extends RunnablesMap>(
+    <C extends books.Column[], L extends SQLFragmentsMap>(
         table: books.Table,
         where: books.Whereable | SQLFragment | AllType,
         options?: books.SelectOptions<C, L>,
     ): SQLFragment<books.FullSelectReturnType<C, L, SelectResultMode.One>>; 
     
-    <C extends authors.Column[], L extends RunnablesMap>(
+    <C extends authors.Column[], L extends SQLFragmentsMap>(
         table: authors.Table,
         where: authors.Whereable | SQLFragment | AllType,
         options?: authors.SelectOptions<C, L>,
@@ -305,8 +304,8 @@ export interface SelectOneSignatures {
 */
       }
 export interface CountSignatures {
-    (table: authors.Table, where?: authors.Whereable | SQLFragment | AllType): SQLFragment<number>;
-    (table: books.Table, where?: books.Whereable | SQLFragment | AllType): SQLFragment<number>;
+    (table: authors.Table, where: authors.Whereable | SQLFragment | AllType, options?: { columns: authors.Column[] }): SQLFragment<number>;
+    (table: books.Table, where: books.Whereable | SQLFragment | AllType, options?: { columns: books.Column[] }): SQLFragment<number>;
 /*
     (table: appleTransactions.Table, where?: appleTransactions.Whereable): Promise<number>;
     (table: emailAuthentication.Table, where?: emailAuthentication.Whereable): Promise<number>;
