@@ -27,6 +27,7 @@ import {
     SQLFragmentsMap,
     PromisedSQLFragmentReturnType,
     PromisedSQLFragmentReturnTypeMap,
+    ParentColumn,
 } from "./core";
 
 export type appleEnvironment = 'PROD' | 'Sandbox';
@@ -49,7 +50,7 @@ export namespace appleTransactions {
         latestReceiptData?: string | null | DefaultType | SQLFragment;
     }
     export interface Updatable extends Partial<Insertable> { };
-    export type Whereable = { [K in keyof Selectable]?: Selectable[K] | SQLFragment };
+    export type Whereable = { [K in keyof Selectable]?: Selectable[K] | SQLFragment | ParentColumn };
     export interface UpsertReturnable extends Selectable, UpsertAction { };
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
@@ -81,7 +82,7 @@ export namespace authors {
         isLiving?: boolean | null | DefaultType | SQLFragment;
     }
     export interface Updatable extends Partial<Insertable> { };
-    export type Whereable = { [K in keyof Selectable]?: Selectable[K] | SQLFragment };
+    export type Whereable = { [K in keyof Selectable]?: Selectable[K] | SQLFragment | ParentColumn };
     export interface UpsertReturnable extends Selectable, UpsertAction { };
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
@@ -124,7 +125,7 @@ export namespace books {
         updatedAt?: Date | DefaultType | SQLFragment;
     }
     export interface Updatable extends Partial<Insertable> { };
-    export type Whereable = { [K in keyof Selectable]?: Selectable[K] | SQLFragment };
+    export type Whereable = { [K in keyof Selectable]?: Selectable[K] | SQLFragment | ParentColumn };
     export interface UpsertReturnable extends Selectable, UpsertAction { };
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
@@ -163,7 +164,7 @@ export namespace emailAuthentication {
         lastFailedLogin?: Date | null | DefaultType | SQLFragment;
     }
     export interface Updatable extends Partial<Insertable> { };
-    export type Whereable = { [K in keyof Selectable]?: Selectable[K] | SQLFragment };
+    export type Whereable = { [K in keyof Selectable]?: Selectable[K] | SQLFragment | ParentColumn };
     export interface UpsertReturnable extends Selectable, UpsertAction { };
     export type Column = keyof Selectable;
     export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;

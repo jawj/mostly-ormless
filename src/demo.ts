@@ -174,6 +174,11 @@ import * as s from "./schema";
 
     console.log(r[0].books[0].title);
 
+    const r2 = await db.select('authors', db.all, {
+      lateral: { books: db.select('books', { authorId: db.parent('id') }) }
+    }).run(db.pool);
+
+    console.dir(r2, { depth: null });
   })();
 
   await (async () => {
@@ -224,7 +229,7 @@ import * as s from "./schema";
     console.log(existingBooks);
 
     const allBookTitles = await db.select("books", db.all, { columns: ['title'] }).run(db.pool);
-    
+
     console.log(allBookTitles);
 
     const lastButOneBook = await db.selectOne("books", { authorId }, {
@@ -233,13 +238,15 @@ import * as s from "./schema";
 
     console.log(lastButOneBook);
 
-    const savedBooks = await db.insert("books", [{
-      authorId: 123,
-      title: "One Hundred Years of Solitude",
-    }, {
-      authorId: 456,
-      title: "Cheerio, and Thanks for All the Fish",
-      }]).run(db.pool);
+    const savedBooks = await db.insert("books",
+      [{
+        authorId: 123,
+        title: "One Hundred Years of Solitude",
+      }, {
+        authorId: 456,
+        title: "Cheerio, and Thanks for All the Fish",
+      }]
+    ).run(db.pool);
     
     console.log(savedBooks);
 

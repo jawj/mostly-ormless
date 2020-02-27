@@ -55,6 +55,8 @@ export function cols<T>(x: T) { return new ColumnNames<T>(x); }
 export class ColumnValues<T> { constructor(public value: T) { } }
 export function vals<T>(x: T) { return new ColumnValues<T>(x); }
 
+export class ParentColumn { constructor(public value: Column) { } }
+export function parent(x: Column) { return new ParentColumn(x); }
 
 export type GenericSQLExpression = SQLFragment<any> | Parameter | DefaultType | DangerousRawString | SelfType;
 export type SQLExpression = Table | ColumnNames<Updatable | (keyof Updatable)[]> | ColumnValues<Updatable> | Whereable | Column | GenericSQLExpression;
@@ -82,7 +84,7 @@ export const insert: InsertSignatures = function
       sql<SQL>`(${vals(completedValues)})`,
     query = sql<SQL>`INSERT INTO ${table} (${colsSQL}) VALUES ${valuesSQL} RETURNING *`;
 
-  if (!Array.isArray(completedValues)) query.transformRunResult = (qr) => qr.rows[0];
+  if (!Array.isArray(completedValues)) query.runResultTransform = (qr) => qr.rows[0];
   return query;
 }
 
@@ -113,7 +115,7 @@ export const upsert: UpsertSignatures = function
 
   const query = sql<SQL>`INSERT INTO ${table} (${colsSQL}) VALUES ${valuesSQL} ON CONFLICT (${uniqueColsSQL}) DO UPDATE SET (${updateColsSQL}) = ROW(${updateValuesSQL}) RETURNING *, CASE xmax WHEN 0 THEN 'INSERT' ELSE 'UPDATE' END AS "$action"`;
 
-  if (!Array.isArray(completedValues)) query.transformRunResult = (qr) => qr.rows[0];
+  if (!Array.isArray(completedValues)) query.runResultTransform = (qr) => qr.rows[0];
   return query;
 }
 
@@ -206,11 +208,12 @@ export const select: SelectSignatures = function (
       const
         subName = raw(`"cj_${k}"`),  // may need a suffix counter to distinguish depth?
         subQ = options.lateral![k];
+      subQ.parentTable = table;
       return sql<SQL>` CROSS JOIN LATERAL (${subQ}) ${subName}`;
     });
 
   const query = sql<SQL>`SELECT ${aggColsSQL} AS result FROM ${table}${lateralSQL}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`;
-  query.transformRunResult = (qr) => qr.rows[0].result;
+  query.runResultTransform = (qr) => qr.rows[0].result;
 
   return query;
 }
@@ -233,7 +236,7 @@ export const count: CountSignatures = function (
   where: Whereable | SQLFragment | AllType = all,
   options?: { columns: Column[] },
 ) {
-  
+
   return select(<any>table, <any>where, <any>options, SelectResultMode.Count);
 }
 
@@ -336,7 +339,8 @@ export function sql<T = SQL, RunResult = pg.QueryResult['rows']>(literals: Templ
 }
 
 export class SQLFragment<RunResult = pg.QueryResult['rows']> {
-  transformRunResult: (qr: pg.QueryResult) => any = (qr) => qr.rows;  // default is to return the rows array
+  runResultTransform: (qr: pg.QueryResult) => any = (qr) => qr.rows;  // default is to return the rows array, but some shortcut functions alter this
+  parentTable?: Table = undefined;  // used for nested shortcut select queries
 
   constructor(private literals: string[], private expressions: SQLExpression[]) { }
 
@@ -344,23 +348,23 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
     const query = this.compile();
     if (config.verbose) console.log(query);
     const qr = await queryable.query(query);
-    return this.transformRunResult(qr);
+    return this.runResultTransform(qr);
   }
 
-  compile(result: SQLResultType = { text: '', values: [] }, currentAlias?: string) {
+  compile(result: SQLResultType = { text: '', values: [] }, parentTable: Table | undefined = this.parentTable, currentColumn?: Column, ) {
     result.text += this.literals[0];
     for (let i = 1, len = this.literals.length; i < len; i++) {
-      this.compileExpression(this.expressions[i - 1], result, currentAlias);
+      this.compileExpression(this.expressions[i - 1], result, parentTable, currentColumn);
       result.text += this.literals[i];
     }
     return result;
   }
 
-  compileExpression(expression: SQL, result: SQLResultType = { text: '', values: [] }, currentAlias?: string) {
+  compileExpression(expression: SQL, result: SQLResultType = { text: '', values: [] }, parentTable: Table | undefined = this.parentTable, currentColumn?: Column) {
 
     if (expression instanceof SQLFragment) {
       // another SQL fragment? recursively compile this one
-      expression.compile(result, currentAlias);
+      expression.compile(result, parentTable, currentColumn);
 
     } else if (typeof expression === 'string') {
       // if it's a string, it should be a x.Table or x.Columns type, so just needs quoting
@@ -372,7 +376,7 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
 
     } else if (Array.isArray(expression)) {
       // an array's elements are compiled one by one
-      for (let i = 0, len = expression.length; i < len; i++) this.compileExpression(expression[i], result, currentAlias);
+      for (let i = 0, len = expression.length; i < len; i++) this.compileExpression(expression[i], result, parentTable, currentColumn);
 
     } else if (expression instanceof Parameter) {
       // parameters become placeholders, and a corresponding entry in the values array
@@ -385,8 +389,8 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
 
     } else if (expression === self) {
       // alias to the latest column, if applicable
-      if (!currentAlias) throw new Error(`The 'self' column alias has no meaning here`);
-      result.text += `"${currentAlias}"`;
+      if (!currentColumn) throw new Error(`The 'self' column alias has no meaning here`);
+      result.text += `"${currentColumn}"`;
 
     } else if (expression instanceof ColumnNames) {
       // a ColumnNames-wrapped object -> quoted names in a repeatable order
@@ -398,7 +402,7 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
     } else if (expression instanceof ColumnValues) {
       // a ColumnValues-wrapped object -> values (in above order) are punted as SQL fragments or parameters
       const
-        columnNames = Object.keys(expression.value).sort(),
+        columnNames = <Column[]>Object.keys(expression.value).sort(),
         columnValues = columnNames.map(k => (<any>expression.value)[k]);
 
       for (let i = 0, len = columnValues.length; i < len; i++) {
@@ -406,13 +410,13 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
           columnName = columnNames[i],
           columnValue = columnValues[i];
         if (i > 0) result.text += ', ';
-        if (columnValue instanceof SQLFragment || columnValue === Default) this.compileExpression(columnValue, result, columnName);
-        else this.compileExpression(new Parameter(columnValue), result, columnName);
+        if (columnValue instanceof SQLFragment || columnValue === Default) this.compileExpression(columnValue, result, parentTable, columnName);
+        else this.compileExpression(new Parameter(columnValue), result, parentTable, columnName);
       }
 
     } else if (typeof expression === 'object') {
       // must be a Whereable object, so put together a WHERE clause
-      const columnNames = Object.keys(expression).sort();
+      const columnNames = <Column[]>Object.keys(expression).sort();
 
       if (columnNames.length) {
         // if the object is not empty
@@ -424,11 +428,16 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
           if (i > 0) result.text += ' AND ';
           if (columnValue instanceof SQLFragment) {
             result.text += '(';
-            this.compileExpression(columnValue, result, columnName);
+            this.compileExpression(columnValue, result, parentTable, columnName);
             result.text += ')';
           } else {
             result.text += `"${columnName}" = `;
-            this.compileExpression(new Parameter(columnValue), result, columnName);
+            if (columnValue instanceof ParentColumn) {
+              if (!parentTable) throw new Error(`The 'parent' table function has no meaning here`);
+              result.text += `"${parentTable}"."${columnValue.value}"`;
+            } else {
+              this.compileExpression(new Parameter(columnValue), result, parentTable, columnName);
+            }
           }
         }
         result.text += ')';
