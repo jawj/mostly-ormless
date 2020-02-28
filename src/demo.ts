@@ -163,20 +163,10 @@ import * as s from "./schema";
       authorBooks: authorBooksSelectable[] = await query.run(db.pool);
 
     console.dir(authorBooks, { depth: null });
-
-    const q = await db.select('authors', db.all, {
-      lateral: {
-        books: db.select('books', { authorId: db.parent('id') })
-      }
-    });
-    const r = await q.run(db.pool);
-    console.dir(r, { depth: null });
-
-    console.log(r[0].books[0].title);
   })();
 
   await (async () => {
-    console.log('\n=== Two-level one-to-many join (using LATERAL) ===\n');
+    console.log('\n=== Multi-level one-to-many join (using LATERAL) ===\n');
 
     type authorBookTagsSQL = s.authors.SQL | s.books.SQL | s.tags.SQL;
     type authorBookTagsSelectable = s.authors.Selectable & {
@@ -198,20 +188,6 @@ import * as s from "./schema";
       authorBookTags: authorBookTagsSelectable[] = await query.run(db.pool);
 
     console.dir(authorBookTags, { depth: null });
-
-    const abt = await db.select('authors', db.all, {
-      lateral: {
-        books: db.select('books', { authorId: db.parent('id') }, {
-          lateral: {
-            tags: db.select('tags', { bookId: db.parent('id') })
-          }
-        })
-      }
-    }).run(db.pool);
-
-    console.dir(abt, { depth: null });
-    abt.map(a => a.books.map(b => b.tags.map(t => t.tag)));
-
   })();
 
   await (async () => {
@@ -315,6 +291,64 @@ import * as s from "./schema";
   })();
 
   await (async () => {
+    console.log('\n=== Shortcut one-to-many join ===\n');
+    
+    const q = await db.select('authors', db.all, {
+      lateral: {
+        books: db.select('books', { authorId: db.parent('id') })
+      }
+    });
+    const r = await q.run(db.pool);
+    console.dir(r, { depth: null });
+  })();
+
+  await (async () => {
+    console.log('\n=== Shortcut multi-level one-to-many join ===\n');
+    
+    const authorsBooksTags = await db.select('authors', db.all, {
+      lateral: {
+        books: db.select('books', { authorId: db.parent('id') }, {
+          lateral: {
+            tags: db.select('tags', { bookId: db.parent('id') })
+          }
+        })
+      }
+    }).run(db.pool);
+
+    console.dir(authorsBooksTags, { depth: null });
+    // authorsBooksTags.map(a => a.books.map(b => b.tags.map(t => t.tag)));
+  })();
+
+  await (async () => {
+    console.log('\n=== Shortcut self-joins requiring aliases ===\n');
+
+    const
+      anna = await db.insert('people', { name: 'Anna' }).run(db.pool),
+      [beth, charlie] = await db.insert('people', [
+        { name: 'Beth', managerId: anna.id },
+        { name: 'Charlie', managerId: anna.id },
+      ]).run(db.pool),
+      dougal = await db.insert('people', { name: 'Dougal', managerId: beth.id }).run(db.pool);
+
+    await db.update('people', { paId: charlie.id }, { id: anna.id }).run(db.pool);
+
+    const people = await db.select('people', db.all, {
+      columns: ['name'],
+      order: [{ by: 'name', direction: 'ASC' }],
+      lateral: {
+        pa: db.selectOne('people', { id: db.parent('paId') },
+          { alias: 'pas', columns: ['name'] }),
+        lineManager: db.selectOne('people', { id: db.parent('managerId') },
+          { alias: 'managers', columns: ['name'] }),
+        directReports: db.select('people', { managerId: db.parent('id') },
+          { alias: 'reports', columns: ['name'], order: [{ by: 'name', direction: 'ASC' }] }),
+      },
+    }).run(db.pool);
+
+    console.dir(people, { depth: null });
+  })();
+
+  await (async () => {
     console.log('\n=== Transaction ===\n');
     const
       email = "me@privacy.net",
@@ -334,35 +368,6 @@ import * as s from "./schema";
       });
     
     console.log(result);
-  })();
-
-  await (async () => {
-    console.log('\n=== Self-joins ===\n');
-
-    const
-      anna = await db.insert('people', { name: 'Anna' }).run(db.pool),
-      [beth, charlie] = await db.insert('people', [
-        { name: 'Beth', managerId: anna.id },
-        { name: 'Charlie', managerId: anna.id },
-      ]).run(db.pool),
-      dougal = await db.insert('people', { name: 'Dougal', managerId: beth.id }).run(db.pool);
-    
-    await db.update('people', { paId: charlie.id }, { id: anna.id }).run(db.pool);
-    
-    const people = await db.select('people', db.all, {
-      columns: ['name'],
-      order: [{ by: 'name', direction: 'ASC' }],
-      lateral: {
-        pa: db.selectOne('people', { id: db.parent('paId') },
-          { alias: 'pas', columns: ['name'] }),
-        lineManager: db.selectOne('people', { id: db.parent('managerId') },
-          { alias: 'managers', columns: ['name'] }),
-        directReports: db.select('people', { managerId: db.parent('id') },
-          { alias: 'reports', columns: ['name'], order: [{ by: 'name', direction: 'ASC' }] }),
-      },
-    }).run(db.pool);
-    
-    console.dir(people, { depth: null });
   })();
 
   await db.pool.end();
