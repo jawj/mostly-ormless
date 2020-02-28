@@ -177,10 +177,11 @@ interface SelectOptions {
   offset?: number,
   columns?: Column[],
   lateral?: SQLFragmentsMap;
+  alias?: string;
 }
 
 export const select: SelectSignatures = function (
-  table: Table,
+  rawTable: Table,
   where: Whereable | SQLFragment | AllType = all,
   rawOptions: SelectOptions = {},
   mode: SelectResultMode = SelectResultMode.Many,
@@ -188,6 +189,8 @@ export const select: SelectSignatures = function (
   
   const
     options = SelectResultMode.One ? Object.assign({}, rawOptions, { limit: 1 }) : rawOptions,
+    table = options.alias || rawTable,
+    tableAliasSQL = table === rawTable ? [] : sql` AS ${table}`,
     colsSQL = mode === SelectResultMode.Count ?
       (options.columns ? sql`count(${cols(options.columns)})` : sql`count(${table}.*)`) :
       options.columns ?
@@ -209,10 +212,10 @@ export const select: SelectSignatures = function (
         subName = raw(`"cj_${k}"`),  // may need a suffix counter to distinguish depth?
         subQ = options.lateral![k];
       subQ.parentTable = table;  // enables db.parent('column') in nested query Wherables
-      return sql<SQL>` CROSS JOIN LATERAL (${subQ}) ${subName}`;
+      return sql<SQL>` LEFT JOIN LATERAL (${subQ}) ${subName} ON true`;
     });
 
-  const query = sql<SQL>`SELECT ${aggColsSQL} AS result FROM ${table}${lateralSQL}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`;
+  const query = sql<SQL>`SELECT ${aggColsSQL} AS result FROM ${rawTable}${tableAliasSQL}${lateralSQL}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`;
   query.runResultTransform = (qr) => qr.rows[0].result;
 
   return query;
@@ -340,7 +343,7 @@ export function sql<T = SQL, RunResult = pg.QueryResult['rows']>(literals: Templ
 
 export class SQLFragment<RunResult = pg.QueryResult['rows']> {
   runResultTransform: (qr: pg.QueryResult) => any = (qr) => qr.rows;  // default is to return the rows array, but some shortcut functions alter this
-  parentTable?: Table = undefined;  // used for nested shortcut select queries
+  parentTable?: string = undefined;  // used for nested shortcut select queries
 
   constructor(private literals: string[], private expressions: SQLExpression[]) { }
 
@@ -351,7 +354,7 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
     return this.runResultTransform(qr);
   }
 
-  compile(result: SQLResultType = { text: '', values: [] }, parentTable?: Table, currentColumn?: Column, ) {
+  compile(result: SQLResultType = { text: '', values: [] }, parentTable?: string, currentColumn?: Column, ) {
     if (this.parentTable) parentTable = this.parentTable;
 
     result.text += this.literals[0];
@@ -362,7 +365,7 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
     return result;
   }
 
-  compileExpression(expression: SQL, result: SQLResultType = { text: '', values: [] }, parentTable?: Table, currentColumn?: Column) {
+  compileExpression(expression: SQL, result: SQLResultType = { text: '', values: [] }, parentTable?: string, currentColumn?: Column) {
     if (this.parentTable) parentTable = this.parentTable;
 
     if (expression instanceof SQLFragment) {

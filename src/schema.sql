@@ -12,6 +12,13 @@ CREATE TABLE "books"
 , "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE "people"
+( "id" SERIAL PRIMARY KEY
+, "name" TEXT NOT NULL
+, "managerId" INTEGER REFERENCES "people"("id")
+, "paId" INTEGER REFERENCES "people"("id")
+);
+
 CREATE TABLE "tags"
 ( "tag" TEXT NOT NULL
 , "bookId" INTEGER NOT NULL REFERENCES "books"("id")

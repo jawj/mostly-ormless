@@ -6,7 +6,7 @@ import * as s from "./schema";
   await (async () => {
     
     // setup (uses shortcut functions)
-    const allTables: s.AllTables = ["appleTransactions", "authors", "books", "emailAuthentication", "tags"];
+    const allTables: s.AllTables = ["appleTransactions", "authors", "books", "emailAuthentication", "people", "tags"];
     await db.truncate(allTables, "CASCADE").run(db.pool);
 
     await db.insert("authors", [
@@ -334,6 +334,30 @@ import * as s from "./schema";
       });
     
     console.log(result);
+  })();
+
+  await (async () => {
+    console.log('\n=== Self-joins ===\n');
+
+    const
+      anna = await db.insert('people', { name: 'Anna' }).run(db.pool),
+      [beth, charlie] = await db.insert('people', [
+        { name: 'Beth', managerId: anna.id },
+        { name: 'Charlie', managerId: anna.id },
+      ]).run(db.pool),
+      dougal = await db.insert('people', { name: 'Dougal', managerId: beth.id }).run(db.pool);
+    
+    await db.update('people', { paId: charlie.id }, { id: anna.id }).run(db.pool);
+    
+    const peopleDetail = await db.select('people', db.all, {
+      columns: ['name'],
+      lateral: {
+        pa: db.selectOne('people', { id: db.parent('paId') }, { alias: 'pas', columns: ['name'] }),
+        manager: db.selectOne('people', { id: db.parent('managerId') }, { alias: 'managers', columns: ['name'] }),
+      }
+    }).run(db.pool);
+    
+    console.dir(peopleDetail, { depth: null });
   })();
 
   await db.pool.end();
