@@ -351,11 +351,11 @@ import * as s from "./schema";
     
     const people = await db.select('people', db.all, {
       columns: ['name'],
+      order: [{ by: 'name', direction: 'ASC' }],
       lateral: {
         pa: db.selectOne('people', { id: db.parent('paId') }, { alias: 'pas', columns: ['name'] }),
         manager: db.selectOne('people', { id: db.parent('managerId') }, { alias: 'managers', columns: ['name'] }),
       },
-      limit: 2,
     }).run(db.pool);
     
     console.dir(people, { depth: null });

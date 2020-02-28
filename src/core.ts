@@ -199,7 +199,6 @@ export const select: SelectSignatures = function (
       sql` || jsonb_build_object(${mapWithSeparator(
         Object.keys(options.lateral), sql`, `, k => raw(`'${k}', "cj_${k}".result`))})`,
     allColsSQL = sql`${colsSQL}${colsLateralSQL}`,
-    aggColsSQL = mode === SelectResultMode.Many ? sql`coalesce(jsonb_agg(${allColsSQL}), '[]')` : allColsSQL,
     whereSQL = where === all ? [] : [sql` WHERE `, where],
     orderSQL = !options.order ? [] :
       [sql` ORDER BY `, ...mapWithSeparator(options.order, sql`, `, o =>
@@ -212,9 +211,13 @@ export const select: SelectSignatures = function (
       return sql<SQL>` LEFT JOIN LATERAL (${subQ}) AS ${raw(`"cj_${k}"`)} ON true`;
     });
 
-  const query = sql<SQL>`SELECT ${aggColsSQL} AS result FROM ${rawTable}${tableAliasSQL}${lateralSQL}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`;
+  const
+    rowsQuery = sql<SQL>`SELECT ${allColsSQL} AS result FROM ${rawTable}${tableAliasSQL}${lateralSQL}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`,
+    query = mode !== SelectResultMode.Many ? rowsQuery :
+      // we need the aggregate to sit in a sub-SELECT in order to keep ORDER and LIMIT working as usual
+      sql<SQL>`SELECT coalesce(jsonb_agg(result), '[]') AS result FROM (${rowsQuery}) AS ${raw(`"sq_${table}"`)}`;
+  
   query.runResultTransform = (qr) => qr.rows[0].result;
-
   return query;
 }
 
