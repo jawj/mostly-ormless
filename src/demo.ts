@@ -349,15 +349,16 @@ import * as s from "./schema";
     
     await db.update('people', { paId: charlie.id }, { id: anna.id }).run(db.pool);
     
-    const peopleDetail = await db.select('people', db.all, {
+    const people = await db.select('people', db.all, {
       columns: ['name'],
       lateral: {
         pa: db.selectOne('people', { id: db.parent('paId') }, { alias: 'pas', columns: ['name'] }),
         manager: db.selectOne('people', { id: db.parent('managerId') }, { alias: 'managers', columns: ['name'] }),
-      }
+      },
+      limit: 2,
     }).run(db.pool);
     
-    console.dir(peopleDetail, { depth: null });
+    console.dir(people, { depth: null });
   })();
 
   await db.pool.end();

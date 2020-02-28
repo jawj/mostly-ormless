@@ -186,9 +186,8 @@ export const select: SelectSignatures = function (
   rawOptions: SelectOptions = {},
   mode: SelectResultMode = SelectResultMode.Many,
 ) {
-  
   const
-    options = SelectResultMode.One ? Object.assign({}, rawOptions, { limit: 1 }) : rawOptions,
+    options = mode === SelectResultMode.One ? Object.assign({}, rawOptions, { limit: 1 }) : rawOptions,
     table = options.alias || rawTable,
     tableAliasSQL = table === rawTable ? [] : sql` AS ${table}`,
     colsSQL = mode === SelectResultMode.Count ?
@@ -208,11 +207,9 @@ export const select: SelectSignatures = function (
     limitSQL = options.limit === undefined ? [] : sql` LIMIT ${raw(String(options.limit))}`,
     offsetSQL = options.offset === undefined ? [] : sql` OFFSET ${raw(String(options.offset))}`,
     lateralSQL = options.lateral === undefined ? [] : Object.keys(options.lateral).map(k => {
-      const
-        subName = raw(`"cj_${k}"`),  // may need a suffix counter to distinguish depth?
-        subQ = options.lateral![k];
+      const subQ = options.lateral![k];
       subQ.parentTable = table;  // enables db.parent('column') in nested query Wherables
-      return sql<SQL>` LEFT JOIN LATERAL (${subQ}) ${subName} ON true`;
+      return sql<SQL>` LEFT JOIN LATERAL (${subQ}) AS ${raw(`"cj_${k}"`)} ON true`;
     });
 
   const query = sql<SQL>`SELECT ${aggColsSQL} AS result FROM ${rawTable}${tableAliasSQL}${lateralSQL}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`;
