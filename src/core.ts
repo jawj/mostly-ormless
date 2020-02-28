@@ -193,7 +193,7 @@ export const select: SelectSignatures = function (
     colsSQL = mode === SelectResultMode.Count ?
       (options.columns ? sql`count(${cols(options.columns)})` : sql`count(${table}.*)`) :
       options.columns ?
-        sql`jsonb_build_object(${mapWithSeparator(options.columns, sql`, `, c => raw(`'${c}', "${table}"."${c}"`))})` :
+        sql`jsonb_build_object(${mapWithSeparator(options.columns, sql`, `, c => raw(`'${c}', "${c}"`))})` :
         sql`to_jsonb(${table}.*)`,
     colsLateralSQL = options.lateral === undefined ? [] :
       sql` || jsonb_build_object(${mapWithSeparator(
