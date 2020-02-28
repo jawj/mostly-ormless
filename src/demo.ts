@@ -353,9 +353,12 @@ import * as s from "./schema";
       columns: ['name'],
       order: [{ by: 'name', direction: 'ASC' }],
       lateral: {
-        lineManager: db.selectOne('people', { id: db.parent('managerId') }, { alias: 'managers', columns: ['name'] }),
-        directReports: db.select('people', { managerId: db.parent('id') }, { alias: 'reports', columns: ['name'] }),
-        pa: db.selectOne('people', { id: db.parent('paId') }, { alias: 'pas', columns: ['name'] }),
+        pa: db.selectOne('people', { id: db.parent('paId') },
+          { alias: 'pas', columns: ['name'] }),
+        lineManager: db.selectOne('people', { id: db.parent('managerId') },
+          { alias: 'managers', columns: ['name'] }),
+        directReports: db.select('people', { managerId: db.parent('id') },
+          { alias: 'reports', columns: ['name'], order: [{ by: 'name', direction: 'ASC' }] }),
       },
     }).run(db.pool);
     
