@@ -3,8 +3,6 @@ Mostly ORMless: ergonomic Postgres from TypeScript
 
 _June 2019: I gave [a very brief outline of this on HN](https://news.ycombinator.com/item?id=19853066) and a few people sounded interested, so here goes. It's extracted from my work as co-founder/CTO at [PSYT](https://www.psyt.co.uk)._
 
----
-
 _March 2020: I've updated this write-up to explain a big new feature: nested `select` helper queries, which compile to `LATERAL` joins and return fully-typed JSON structures._
 
 ---
@@ -530,11 +528,10 @@ Into this:
 ```typescript
     const
       authorId = 123,
-      existingBooks = await select("books", { authorId }).run(pool),
-      titles = existingBooks.map(b => b.);
+      existingBooks = await select("books", { authorId }).run(pool);
 ```
 
-What's really nice here is that, thanks to the schemats-generated function signatures, once I've typed in `"books"` as the first argument to the function, TypeScript and VS Code know both how to type-check and auto-complete the second argument (which, if present, must be a `books.Whereable`) and the type by returned by the `run` function (which must be a `books.Selectable[]` or equivalent).
+What's really nice here is that, thanks to the schemats-generated function signatures, once I've typed in `"books"` as the first argument to the function, TypeScript and VS Code know both how to type-check and auto-complete the second argument (which, if present, must be a `books.Whereable`) and the type returned by the `run` function (which must be a `Promise<books.Selectable[]>` or equivalent).
 
 ![Screenshot: inferred return type](README-resources/return-type.png)
 
@@ -543,12 +540,12 @@ The generated function signatures that make this happen look like so:
 ```typescript
 interface SelectSignatures {
   /* books */
-  <C extends books.Column[], L extends SQLFragmentsMap, M extends SelectResultMode = SelectResultMode.Many>(
+  <C extends books.Column[], L extends SQLFragmentsMap, E extends SQLFragmentsMap, M extends SelectResultMode = SelectResultMode.Many>(
     table: books.Table,
     where: books.Whereable | SQLFragment | AllType,
-    options?: books.SelectOptions<C, L>,
+    options?: books.SelectOptions<C, L, E>,
     mode?: M,
-  ): SQLFragment<books.FullSelectReturnType<C, L, M>>;
+  ): SQLFragment<books.FullSelectReturnType<C, L, E, M>>;
   
   /* and likewise for every other table: */
   /* ... */
@@ -735,7 +732,7 @@ Maybe you recall, back in [Part 2](#act2), that we put together a big `LATERAL` 
 
 We can do better! Since `SQLFragments` are already designed to contain other `SQLFragments`, it's a pretty small leap to enable `select` calls to be nested inside other `select` calls in order to significantly simplify this kind of `LATERAL` join query.
 
-We achieve this with an additional `options` key, `lateral`, which takes a mapping of property names to nested `select`s, and allows us to rewrite the big join from Part 2 like so:
+We achieve this with an additional `options` key, `lateral`, which takes a mapping of property names to nested `select` calls, and allows us to rewrite the big join from Part 2 like so:
 
 ```typescript
 const authorsBooksTags = await select('authors', all, {
