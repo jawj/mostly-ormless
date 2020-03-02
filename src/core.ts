@@ -403,6 +403,7 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
       result.text += `"${currentColumn}"`;
 
     } else if (expression instanceof ParentColumn) {
+      // alias to the parent table (plus supplied column name) of a nested query, if applicable
       if (!parentTable) throw new Error(`The 'parent' table alias has no meaning here`);
       result.text += `"${parentTable}"."${expression.value}"`;
 
