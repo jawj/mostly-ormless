@@ -810,7 +810,7 @@ There are still a couple of limitations to type inference for nested queries. Fi
 
 Nevertheless, this is a handy, flexible — but still transparent and zero-abstraction — way to generate and run complex join queries. 
 
-You're not limited to equating a foreign key to a primary key, either. For example, you can sub-`select` the `N` nearest somethings using `limit` alonside an `order` option with PostGIS's index-aware [`<-> operator`](https://postgis.net/docs/geometry_distance_knn.html). You could even return the distance to each, using another new `options` key, `extras`, which works in a rather similar way to `lateral`.
+You're not limited to equating a foreign key to a primary key, either. For example, you can sub-`select` the `N` nearest somethings using `limit` alongside an `order` option with PostGIS's index-aware [`<-> operator`](https://postgis.net/docs/geometry_distance_knn.html). You could even return the distance to each one, using another new `options` key, `extras`, which works in a rather similar way to `lateral`.
 
 Here's a new table:
 
@@ -824,7 +824,7 @@ CREATE TABLE "stores"
 CREATE INDEX "storesGeomIdx" ON "stores" USING gist("geom");
 ```
 
-Now we add some stores:
+Add some stores:
 
 ```typescript
 const gbPoint = (mEast: number, mNorth: number) =>
