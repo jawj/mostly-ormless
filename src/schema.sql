@@ -54,3 +54,4 @@ CREATE TABLE "stores"
 , "name" TEXT NOT NULL
 , "geom" GEOMETRY NOT NULL
 );
+CREATE INDEX "storesGeomIdx" ON "stores" USING gist("geom");

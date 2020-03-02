@@ -810,7 +810,7 @@ There are still a couple of limitations to type inference for nested queries. Fi
 
 Nevertheless, this is a handy, flexible — but still transparent and zero-abstraction — way to generate and run complex join queries. 
 
-You're not limited to equating a foreign key to a primary key, either. For example, you could sub-`select` the `N` nearest somethings using PostGIS's [`<-> operator`](https://postgis.net/docs/geometry_distance_knn.html) in your `order` options, with `limit`. You could even return the distance to each, using another new `options` key, `extras`, which works in a rather similar way to `lateral`.
+You're not limited to equating a foreign key to a primary key, either. For example, you can sub-`select` the `N` nearest somethings using `limit` alonside an `order` option with PostGIS's index-aware [`<-> operator`](https://postgis.net/docs/geometry_distance_knn.html). You could even return the distance to each, using another new `options` key, `extras`, which works in a rather similar way to `lateral`.
 
 Here's a new table:
 
@@ -821,6 +821,7 @@ CREATE TABLE "stores"
 , "name" TEXT NOT NULL
 , "geom" GEOMETRY NOT NULL
 );
+CREATE INDEX "storesGeomIdx" ON "stores" USING gist("geom");
 ```
 
 Now we add some stores:
@@ -838,23 +839,21 @@ const [brighton] = await insert('stores', [
 ]).run(pool);
 ```
 
-And then query my local store (Brighton) and its three nearest alternatives:
+And then query my local store (Brighton) plus its three nearest alternatives, with their distance in metres:
 
 ```typescript
 const localStore = await selectOne('stores', { id: brighton.id }, {
   columns: ['name'],
   lateral: {
-    alternatives: select('stores',
-      { id: sql<s.stores.SQL>`${self} <> ${"stores"}.${"id"}` },  // exclude the queried store
-      {
-        alias: 'nearby',
-        order: [{ by: sql<s.stores.SQL>`${"geom"} <-> ${"stores"}.${"geom"}`, direction: 'ASC' }],
-        limit: 3,
-        columns: ['name'],
-        extras: {
-          km: sql<s.stores.SQL, number>`round(ST_Distance(${"geom"}, ${"stores"}.${"geom"}) / 1000)`
-        },
-      })
+    alternatives: select('stores', sql<s.stores.SQL>`${"id"} <> ${parent("id")}`, {
+      alias: 'nearby',
+      order: [{ by: sql<s.stores.SQL>`${"geom"} <-> ${parent("geom")}`, direction: 'ASC' }],
+      limit: 3,
+      columns: ['name'],
+      extras: {
+        distance: sql<s.stores.SQL, number>`ST_Distance(${"geom"}, ${parent("geom")})`,
+      },
+    })
   }
 }).run(pool);
 

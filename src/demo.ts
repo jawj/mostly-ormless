@@ -361,17 +361,15 @@ import * as s from "./schema";
     const localStore = await db.selectOne('stores', { id: brighton.id }, {
       columns: ['name'],
       lateral: {
-        alternatives: db.select('stores',
-          { id: db.sql<s.stores.SQL>`${db.self} <> ${"stores"}.${"id"}` },  // exclude the queried store
-          {
-            alias: 'nearby',
-            order: [{ by: db.sql<s.stores.SQL>`${"geom"} <-> ${"stores"}.${"geom"}`, direction: 'ASC' }],
-            limit: 3,
-            columns: ['name'],
-            extras: {
-              km: db.sql<s.stores.SQL, number>`round(ST_Distance(${"geom"}, ${"stores"}.${"geom"}) / 1000)`
-            },
-          })
+        alternatives: db.select('stores', db.sql<s.stores.SQL>`${"id"} <> ${db.parent("id")}`, {
+          alias: 'nearby',
+          order: [{ by: db.sql<s.stores.SQL>`${"geom"} <-> ${db.parent("geom")}`, direction: 'ASC' }],
+          limit: 3,
+          columns: ['name'],
+          extras: {
+            distance: db.sql<s.stores.SQL, number>`ST_Distance(${"geom"}, ${db.parent("geom")})`
+          },
+        })
       }
     }).run(db.pool);
 

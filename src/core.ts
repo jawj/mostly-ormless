@@ -402,6 +402,10 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
       if (!currentColumn) throw new Error(`The 'self' column alias has no meaning here`);
       result.text += `"${currentColumn}"`;
 
+    } else if (expression instanceof ParentColumn) {
+      if (!parentTable) throw new Error(`The 'parent' table alias has no meaning here`);
+      result.text += `"${parentTable}"."${expression.value}"`;
+
     } else if (expression instanceof ColumnNames) {
       // a ColumnNames-wrapped object -> quoted names in a repeatable order
       // or: a ColumnNames-wrapped array
@@ -428,8 +432,7 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
       // must be a Whereable object, so put together a WHERE clause
       const columnNames = <Column[]>Object.keys(expression).sort();
 
-      if (columnNames.length) {
-        // if the object is not empty
+      if (columnNames.length) {  // if the object is not empty
         result.text += '(';
         for (let i = 0, len = columnNames.length; i < len; i++) {
           const
@@ -440,14 +443,11 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
             result.text += '(';
             this.compileExpression(columnValue, result, parentTable, columnName);
             result.text += ')';
+
           } else {
             result.text += `"${columnName}" = `;
-            if (columnValue instanceof ParentColumn) {
-              if (!parentTable) throw new Error(`The 'parent' table function has no meaning here`);
-              result.text += `"${parentTable}"."${columnValue.value}"`;
-            } else {
-              this.compileExpression(new Parameter(columnValue), result, parentTable, columnName);
-            }
+            this.compileExpression(columnValue instanceof ParentColumn ? columnValue : new Parameter(columnValue),
+              result, parentTable, columnName);
           }
         }
         result.text += ')';
