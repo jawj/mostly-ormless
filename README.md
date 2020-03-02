@@ -866,9 +866,9 @@ Giving:
 {
   name: 'Brighton',
   alternatives: [
-    { km: 75, name: 'London' },
-    { km: 242, name: 'Exeter' },
-    { km: 472, name: 'Newcastle' }
+    { name: 'London', distance: 75315.1492065175 },
+    { name: 'Exeter', distance: 242460.11878245 },
+    { name: 'Newcastle', distance: 471743.393382462 }
   ]
 }
 ```
