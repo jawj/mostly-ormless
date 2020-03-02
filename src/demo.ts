@@ -6,7 +6,7 @@ import * as s from "./schema";
   await (async () => {
     
     // setup (uses shortcut functions)
-    const allTables: s.AllTables = ["appleTransactions", "authors", "books", "emailAuthentication", "people", "tags"];
+    const allTables: s.AllTables = ["appleTransactions", "authors", "books", "emailAuthentication", "employees", "stores", "tags"];
     await db.truncate(allTables, "CASCADE").run(db.pool);
 
     await db.insert("authors", [
@@ -323,29 +323,59 @@ import * as s from "./schema";
     console.log('\n=== Shortcut self-joins requiring aliases ===\n');
 
     const
-      anna = await db.insert('people', { name: 'Anna' }).run(db.pool),
-      [beth, charlie] = await db.insert('people', [
+      anna = await db.insert('employees', { name: 'Anna' }).run(db.pool),
+      [beth, charlie] = await db.insert('employees', [
         { name: 'Beth', managerId: anna.id },
         { name: 'Charlie', managerId: anna.id },
       ]).run(db.pool),
-      dougal = await db.insert('people', { name: 'Dougal', managerId: beth.id }).run(db.pool);
+      dougal = await db.insert('employees', { name: 'Dougal', managerId: beth.id }).run(db.pool);
 
-    await db.update('people', { paId: charlie.id }, { id: anna.id }).run(db.pool);
-
-    const people = await db.select('people', db.all, {
+    const people = await db.select('employees', db.all, {
       columns: ['name'],
       order: [{ by: 'name', direction: 'ASC' }],
       lateral: {
-        pa: db.selectOne('people', { id: db.parent('paId') },
-          { alias: 'pas', columns: ['name'] }),
-        lineManager: db.selectOne('people', { id: db.parent('managerId') },
+        lineManager: db.selectOne('employees', { id: db.parent('managerId') },
           { alias: 'managers', columns: ['name'] }),
-        directReports: db.select('people', { managerId: db.parent('id') },
-          { alias: 'reports', columns: ['name'], order: [{ by: 'name', direction: 'ASC' }] }),
+        directReports: db.count('employees', { managerId: db.parent('id') },
+          { alias: 'reports' }),
       },
     }).run(db.pool);
 
     console.dir(people, { depth: null });
+  })();
+
+  await (async () => {
+    console.log('\n=== Shortcut joins beyond foreign keys ===\n');
+
+    const gbLocation = (mEast: number, mNorth: number) =>
+      db.sql`ST_SetSRID(ST_Point(${db.param(mEast)}, ${db.param(mNorth)}), 27700)`;
+
+    const [brighton] = await db.insert('stores', [
+      { name: 'Brighton', geom: gbLocation(530587, 104192) },
+      { name: 'London', geom: gbLocation(534927, 179382) },
+      { name: 'Edinburgh', geom: gbLocation(323427, 676132) },
+      { name: 'Newcastle', geom: gbLocation(421427, 563132) },
+      { name: 'Exeter', geom: gbLocation(288427, 92132) },
+    ]).run(db.pool);
+
+    const localStore = await db.selectOne('stores', { id: brighton.id }, {
+      columns: ['name'],
+      lateral: {
+        alternatives: db.select('stores',
+          { id: db.sql<s.stores.SQL>`${db.self} <> ${"stores"}.${"id"}` },  // exclude queried store
+          {
+            alias: 'nearby',
+            columns: ['name'],
+            extras: {
+              km: db.sql<s.stores.SQL, number>`round(ST_Distance(${"geom"}, ${"stores"}.${"geom"}) / 1000)`
+            },
+            order: [{ by: db.sql<s.stores.SQL>`${"geom"} <-> ${"stores"}.${"geom"}`, direction: 'ASC' }],
+            limit: 3,
+          })
+      }
+    }).run(db.pool);
+
+    console.log(localStore);
   })();
 
   await (async () => {

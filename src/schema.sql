@@ -12,13 +12,6 @@ CREATE TABLE "books"
 , "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE "people"
-( "id" SERIAL PRIMARY KEY
-, "name" TEXT NOT NULL
-, "managerId" INTEGER REFERENCES "people"("id")
-, "paId" INTEGER REFERENCES "people"("id")
-);
-
 CREATE TABLE "tags"
 ( "tag" TEXT NOT NULL
 , "bookId" INTEGER NOT NULL REFERENCES "books"("id")
@@ -49,3 +42,15 @@ ALTER TABLE "appleTransactions"
   ADD CONSTRAINT "appleTransPKey" 
   PRIMARY KEY ("environment", "originalTransactionId");
 
+CREATE TABLE "employees"
+( "id" SERIAL PRIMARY KEY
+, "name" TEXT NOT NULL
+, "managerId" INTEGER REFERENCES "employees"("id")
+);
+
+CREATE EXTENSION postgis;
+CREATE TABLE "stores"
+( "id" SERIAL PRIMARY KEY
+, "name" TEXT NOT NULL
+, "geom" GEOMETRY NOT NULL
+);

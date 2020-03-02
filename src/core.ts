@@ -176,6 +176,7 @@ interface SelectOptions {
   limit?: number,
   offset?: number,
   columns?: Column[],
+  extras?: SQLFragmentsMap;
   lateral?: SQLFragmentsMap;
   alias?: string;
 }
@@ -198,7 +199,10 @@ export const select: SelectSignatures = function (
     colsLateralSQL = options.lateral === undefined ? [] :
       sql` || jsonb_build_object(${mapWithSeparator(
         Object.keys(options.lateral), sql`, `, k => raw(`'${k}', "cj_${k}".result`))})`,
-    allColsSQL = sql`${colsSQL}${colsLateralSQL}`,
+    colsExtraSQL = options.extras === undefined ? [] :
+      sql` || jsonb_build_object(${mapWithSeparator(
+        Object.keys(options.extras), sql`, `, k => [raw(`'${k}', `), options.extras![k]])})`,
+    allColsSQL = sql`${colsSQL}${colsLateralSQL}${colsExtraSQL}`,
     whereSQL = where === all ? [] : [sql` WHERE `, where],
     orderSQL = !options.order ? [] :
       [sql` ORDER BY `, ...mapWithSeparator(options.order, sql`, `, o =>
@@ -237,7 +241,7 @@ export const selectOne: SelectOneSignatures = function (
 export const count: CountSignatures = function (
   table: Table,
   where: Whereable | SQLFragment | AllType = all,
-  options?: { columns: Column[] },
+  options?: { columns?: Column[], alias?: string },
 ) {
 
   return select(<any>table, <any>where, <any>options, SelectResultMode.Count);
@@ -354,7 +358,7 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
     return this.runResultTransform(qr);
   }
 
-  compile(result: SQLResultType = { text: '', values: [] }, parentTable?: string, currentColumn?: Column, ) {
+  compile(result: SQLResultType = { text: '', values: [] }, parentTable?: string, currentColumn?: Column) {
     if (this.parentTable) parentTable = this.parentTable;
 
     result.text += this.literals[0];

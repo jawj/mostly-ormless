@@ -1,7 +1,13 @@
 Mostly ORMless: ergonomic Postgres from TypeScript
 ==
 
-_I gave [a very brief outline of this on HN](https://news.ycombinator.com/item?id=19853066) and a few people sounded interested, so here goes. It's extracted from my work as co-founder/CTO at [PSYT](https://www.psyt.co.uk)._
+_June 2019: I gave [a very brief outline of this on HN](https://news.ycombinator.com/item?id=19853066) and a few people sounded interested, so here goes. It's extracted from my work as co-founder/CTO at [PSYT](https://www.psyt.co.uk)._
+
+---
+
+_March 2020: I've updated this write-up to explain a big new feature: nested `select` helper queries, which compile to `LATERAL` joins and return fully-typed JSON structures._
+
+---
 
 TypeScript and VS Code are [wonderful](https://stackoverflow.com/questions/12694530/what-is-typescript-and-why-would-i-use-it-in-place-of-javascript/35048303#35048303). ORMs are [problematic](https://en.wikipedia.org/wiki/Object-relational_impedance_mismatch). 
 
@@ -11,30 +17,30 @@ That's why, in the course of converting a project to TypeScript recently, I deci
 
 So, let's back up a bit. What am I really after?
 
-Well, I like and understand Postgres. I like and understand SQL. When I'm working with data, I'd like a good mental model of what SQL is going to be issued. I don't mind writing the SQL myself, but in that case let me _write_ the SQL, rather than deal with the endlessly chained method calls of a 'query builder'.
+Well, I understand and appreciate SQL. I understand and appreciate Postgres. I don't need or want any sort of abstraction layer on top. When I'm working with data, I want a clear mental model of what SQL commands are going to be run. I don't at all mind writing the SQL myself, but in that case let me _write_ the SQL, not deal with the endless chained method calls of a 'query builder'.
 
 Also, I'm greedy. I want all that, but I want to keep all the type-checking goodness of TypeScript — speeding development, preventing bugs, simplifying refactoring — too. And I'd _strongly_ prefer not to spend hours laboriously adding and later maintaining lots of type information to facilitate it.
 
-In short, I want [cake](https://www.theguardian.com/books/2018/jul/05/word-of-the-week-cake). So I set out to see if I could rustle some up. As it turns out, this was about a week-long project in [three acts](https://en.wikipedia.org/wiki/Three-act_structure):
+In short, I want [cake](https://www.theguardian.com/books/2018/jul/05/word-of-the-week-cake). So I set out to see if I could rustle some up. Initially a week-long project in [three acts](https://en.wikipedia.org/wiki/Three-act_structure), it has now extended into a [trilogy in five parts](https://www.goodreads.com/book/show/372299.The_Hitch_Hiker_s_Guide_to_the_Galaxy):
 
-* _[Act 1](#act1): In which we translate a Postgres schema into TypeScript types._ Spoiler: we'll use a project called [schemats](https://github.com/SweetIQ/schemats) here.
-* _[Act 2](#act2): In which we significantly expand that type information and use it to improve the ergonomics of writing raw SQL._ Spoiler: ES2015 [tagged templates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_templates) will play a starring role.
-* _[Act 3](#act3): In which we create a set of simple shortcut functions on top, which looks a little bit like an ORM but really isn't._ Spoiler: Typescript [function signature overloads](https://www.typescriptlang.org/docs/handbook/functions.html) on concrete string values will be these functions' secret sauce.
+* _[Part 1](#act1): In which we automatically translate a Postgres DB schema into TypeScript types._ Spoiler: we'll fork a project called [schemats](https://github.com/SweetIQ/schemats) here.
+* _[Part 2](#act2): In which we significantly expand that type information, and use it to improve the ergonomics of writing raw SQL._ Spoiler: ES2015 [tagged templates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_templates) will play a starring role.
+* _[Part 3](#act3): In which we create a set of simple shortcut functions on top (which bear a passing resemblance to an ORM, but really aren't one)._ Spoiler: Typescript [function signature overloads](https://www.typescriptlang.org/docs/handbook/functions.html) on concrete string values will be these functions' secret sauce.
+* _[Part 4](#act4): In which we extend our `select` shortcut function to allow nested queries._ Spoiler: nested queries become `LATERAL` joins, and the results are still fully typed. (This Part is new for March 2020).
+* _[Part 5](#act5): In which we deal with transactions._
 
-(There is a also a brief [encore](#encore) in which I discuss transactions).
-
-<a name="act1"></a>Act 1: In which we translate a Postgres schema into TypeScript types
+<a name="act1"></a>In which we automatically translate a Postgres DB schema into TypeScript types
 --
 
 If you want type information that matches a database schema, you have two ways to maintain a [single source of truth](https://en.wikipedia.org/wiki/Single_source_of_truth). 
 
 On the one hand, you can define a schema in TypeScript (or JavaScript), then automagically issue database commands to sync up the tables and columns. That's the approach taken by both Sequelize and TypeScript. This approach helps manage schema updates across multiple databases (e.g. test, staging, production). But I've always been a bit leery of it: I'm not sure I want any code, let alone a third party npm library, issuing `CREATE`/`ALTER`/`DROP TABLE` statements at will where production data may be involved.
 
-So, on the other hand, you can take the database schema as your source of truth, then interrogate it to discover the tables and column types. This is what [Active Record](https://guides.rubyonrails.org/active_record_basics.html) does (or at least, what it did when I last used it, about 10 years ago), and what I'm going to do here. Managing schema updates across multiple databases is therefore something I'm not going to address (but check out tools such as [dbmate](https://github.com/amacneil/dbmate)).
+On the other hand, you can take the database schema as your source of truth, then interrogate it to discover the tables and column types. This is what [Active Record](https://guides.rubyonrails.org/active_record_basics.html) does (or at least, what it did when I last used it, about 10 years ago), and what I'm going to do here. This approach leaves you with the job of managing schema updates across multiple databases, which is not something I'll address here, but standalone tools for this purpose do exist (e.g. [dbmate](https://github.com/amacneil/dbmate)).
 
-Active Record interrogates the database at runtime, but I'm going to do it prior to runtime: discovering types only at runtime would be largely pointless, since what we want is type information to ease development. 
+Active Record interrogates the database at runtime, but I'm going to do it prior to runtime: discovering types only at runtime would be largely pointless, since what we want is type information to ease _development_.
 
-As it happens, there's already a library that can do most of the heavy lifting we need, called [schemats](https://github.com/SweetIQ/schemats).
+As it happens, there's already a library that can do most of the heavy lifting we need. It's named [schemats](https://github.com/SweetIQ/schemats).
 
 How does it work? Well, take this simple database schema:
 
@@ -94,15 +100,15 @@ const
   existingBooks: books[] = result.rows;
 ```
 
-Our results now pop out fully typed. But there are still some real annoyances here:
+Our results now pop out fully typed. But there are still some annoyances here:
 
-* There's nothing to stop me absent-mindedly or fat-fingeredly trying to query from the non-existent tables `"novels"` or `"boks"`, or according to the non-existent columns `"writerId"` or `"authorid"`, or indeed trying to equate my `"authorId"` with a string or date. There's no auto-complete to help me out, and any errors (whether introduced now or by a future schema update) will only become apparent later on, at runtime.
+* There's nothing to stop me absent-mindedly or fat-fingeredly trying to query from the non-existent tables `"novels"` or `"boks"`, or according to the non-existent columns `"writerId"` or `"authorid"`, or indeed trying to equate my `"authorId"` with a string or date. There's no auto-complete to help me out, and any errors (whether introduced now or by a future schema update) will only become apparent at runtime.
 * I have to keep track of the order of interpolated parameters, and provide them separately from the query text. That's only `authorId` in this instance, but there could be dozens.
 * Things are even worse for `INSERT`s and `UPDATE`s, where I need to generate separate, matching-ordered lists of column names and their corresponding values.
 
 So, here's the plan. I'm going to come up with some ES2015 [tagged templates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_templates) to improve these SQL-writing ergonomics in TypeScript. But first, to support that, I'm going to need some more complete type information about my tables.
 
-<a name="act2"></a>Act 2: In which we expand that type information and use it to improve the ergonomics of writing raw SQL
+<a name="act2"></a>Part 2: In which we significantly expand that type information, and use it to improve the ergonomics of writing raw SQL
 --
 
 I said I wanted more complete type information about my tables. Specifically, I want the types I generate to specify not just what I'll get back from a `SELECT` query, but also what I'm allowed to use in a `WHERE` condition, and what I can `INSERT` and `UPDATE` too.
@@ -111,12 +117,12 @@ So these are the four main interfaces I'm going to define:
 
 * **`Selectable`**: what I'll get back from a `SELECT` query. This is what schemats was already giving us.
 * **`Whereable`**: what I can use in a `WHERE` condition. This is approximately the same as `Selectable`, but all columns are optional. It is (subject to some later tweaks) a `Partial<Selectable>`.
-* **`Insertable`**: what I can `INSERT` into a table. This is also similar to `Selectable`, but any fields that are `NULL`able and/or have `DEFAULT` values are allowed to be missing, `NULL` or `DEFAULT`.
-* **`Updatable`**: what I can `UPDATE` a row with. This is similar to what I can `INSERT`, but all columns are optional: it is a simple `Partial<Insertable>`.
+* **`Insertable`**: what I can `INSERT` into a table. This is also similar to `Selectable`, but any fields that are `NULL`able and/or have `DEFAULT` values are allowed to be missing or `NULL` or `DEFAULT`.
+* **`Updatable`**: what I can `UPDATE` a row with. This is similar to what I can `INSERT`, but all columns are optional: it's a simple `Partial<Insertable>`.
 
-I [forked schemats](https://github.com/PSYT/schemats) to generate these interfaces. While I was at it I also got rid of the verbose, original, two-stage approach, where a type alias is created for every column.
+I [forked schemats](https://github.com/PSYT/schemats) to generate these interfaces. While I was at it, I also got rid of the verbose, two-stage output, where a type alias is created for every column.
 
-Ignoring a few additional bells and whistles, my schemats fork therefore now generates something like the following when run against the `books` table:
+Ignoring some additional bells and whistles, my fork therefore now generates something like the following when run against the `books` table:
 
 ```typescript
 export namespace books {
@@ -167,7 +173,7 @@ const bookConditions: books.Whereable = {
 
 But how am I going to use these extra types? Enter the [tagged templates](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals#Tagged_templates) I mentioned earlier.
 
-Tagged templates are pleasingly flexible. Critically, neither a template's interpolated values nor its return value have to be strings. And TypeScript supports tagged templates fully, applying the tag function's signature to the interpolated values.
+Tagged templates are pleasingly flexible. Notably, neither a template's interpolated values nor its return value have to be strings. And TypeScript supports tagged templates fully, applying the tag function's signature to the interpolated values.
 
 This is useful because:
 
@@ -175,10 +181,10 @@ This is useful because:
 * It's going to be generic, so I can tell it which table(s) it targets: e.g. `sql<books.SQL>` ``` `-- database query goes here` ```
 * It's not going to return a string (yet), but an instance of a class I'm going to call `SQLFragment`.
 * Different kinds of interpolated values will be processed in different ways, and they'll be type-checked and auto-completed appropriately.
-* An important kind of interpolated values is other `SQLFragment`s.
-* When it comes to making the query, the root `SQLFragment` will be compiled recursively to produce the appropriate `{ text: '', values: [] }` object that can be passed on to `pg`.
+* An important kind of interpolated value is other `SQLFragment`s.
+* When it comes to issuing the query, the root `SQLFragment` will be compiled recursively to produce the appropriate `{ text: '', values: [] }` object that can be passed on to `pg`.
 
-It's still going to be possible to write invalid SQL, of course, but a bunch of simple errors (including most of the errors that could be introduced by future refactorings) will be caught at compile time or earlier.
+It's still going to be possible to write invalid SQL, of course, but a bunch of simple errors (including most of the errors that could be introduced by future refactorings or schema changes) will be caught at edit- or compile-time.
 
 **`SELECT`**
 
@@ -193,7 +199,7 @@ const
 
 What's happening here? 
 
-Well, first, the table name is now being interpolated, which means it will be type checked and auto-completed. That means: I can pick it from a list; if I get it wrong, I'll be told so immediately; and if I later change its name in the database but forget to change it here, I'll be told so immediately too.
+Well, first, the table name is now being interpolated. That means it will be type checked and auto-completed. And _that_ means: I can pick it from a list; if I get it wrong, I'll be told so immediately; and if I later change its name in the database but forget to change it here, I'll be told so too.
 
 ![Screenshot: table type-checking](README-resources/table-type-check.png)
 
@@ -219,7 +225,7 @@ const
     WHERE ${{
       authorId,
       createdAt: sql<books.SQL>`
-        ${self} > now() - ${param(period)} * INTERVAL '1 DAY'`,
+        ${self} > now() - ${param(days)} * INTERVAL '1 DAY'`,
     }}`;
 ```
 
@@ -232,7 +238,7 @@ And to confirm how this is compiled:
   values: [ 123, 7 ] }
 ```
 
-You can see the `SQLFragment` nested inside the `Whereable`. You can also see a symbol I've called `self`, which is compiled to its parent column name. Finally, I'm using my `param` wrapper function, which lets me manually insert parameters to be represented as `$1`, `$2` (etc.) and added to the pg query's `values` array.
+You can see the `SQLFragment` nested inside the `Whereable`. You can also see a symbol I've called `self`, which gets compiled to its parent column name. Finally, I'm using a wrapper function I've called `param`, which lets me manually insert parameters to be represented as `$1`, `$2` (etc.) and added to the pg query's `values` array.
 
 **`INSERT` and `UPDATE`**
 
@@ -266,7 +272,7 @@ And, of course, this is all being type-checked and auto-completed as I type it:
 
 ![Screenshot: column name auto-completion](README-resources/column-title-auto-complete.png)
 
-And if, for example, someone renames the `title` column to `name` in future, TypeScript will complain before I even try to run the program.
+And if, for example, someone renames the `title` column to `name` in future, VS Code will complain before I even try to run the code.
 
 For further flexibility, there are three further kinds of interpolated value that are supported in a `sql` template. They are:
 
@@ -404,7 +410,7 @@ const query = db.sql<authorBooksSQL>`
   ) bq`;
 ```
  
-This approach is straightforward to extend to more complex, nested cases too. Say, for example, that we let each book have multiple tags, with the following addition to the schema:
+This approach can be extended to more complex, nested cases too. Say, for example, that we let each book have multiple tags, with the following addition to the schema:
 
 ```sql
 CREATE TABLE "tags"
@@ -473,9 +479,7 @@ Which gives, correctly typed:
 
 **Field subsets**
 
-Unless you have very wide tables and/or very large values, it could be a [premature optimization](https://softwareengineering.stackexchange.com/questions/80084/is-premature-optimization-really-the-root-of-all-evil) to query only for a subset of fields.
-
-But if you need it, two conveniences are provided: (1) the `cols` function can take an array of column names, and simply spit them out quoted and comma-separated; and (2) there's a table-specific type helper `OnlyCols` that will narrow `Selectable` down to the columns included in such an array.
+Unless you have very wide tables and/or very large values, it might be a [premature optimization](https://softwareengineering.stackexchange.com/questions/80084/is-premature-optimization-really-the-root-of-all-evil) to query only a subset of fields. But if you need it, two conveniences are provided: (1) the `cols` function can take an array of column names, and simply spit them out quoted and comma-separated; and (2) there's a table-specific type helper `OnlyCols` that will narrow the appropriate `Selectable` down to the columns included in such an array.
 
 For example:
 
@@ -498,15 +502,15 @@ Giving:
   { id: 155, title: 'One Hundred Years of Solitude' } ]
 ```
 
-And that marks the end of Act 2. SQL queries are now being auto-completed and type-checked for me, which is excellent. But a lot of the simple stuff still feels a bit boiler-platey and verbose.
+And that marks the end of Part 2. SQL queries are now being auto-completed and type-checked for me, which is excellent. But a lot of the simple stuff still feels a bit boiler-platey and verbose. And those multi-level `SELECT` queries are getting kind of long and hairy.
 
 
-<a name="act3"></a>Act 3: In which we create a set of simple shortcut functions on top, which looks a little bit like an ORM but really isn't
+<a name="act3"></a>Part 3: In which we create a set of simple shortcut functions on top (which bear a passing resemblance to an ORM, but really aren't one)
 --
 
-In the final Act, I aim to make the simple one-table CRUD stuff fall-off-a-log easy with some straightforward helper functions. For these helper functions I generate a set of overloaded signatures per table, which means the return type and all other argument types can be inferred automatically from the table name argument.
+So, in the interests of fighting hairy boiler-plate, let's see if we can't make the simple one-table CRUD stuff fall-off-a-log easy with some helper functions. For these helper functions I generate a set of overloaded signatures per table, which means the return type and all other argument types can be inferred automatically from the table name argument.
 
-I haven't yet done anything to help with JOINs, but that may be worth considering for the future.
+_Note: in an earlier iteration, these helper functions took a Postgres client/pool argument, ran a query, and returned the result. Now they instead return a `SQLFragment` which it's your job to call `run` on. This increases consistency and facilitates the query nesting discussed in [Part 4](#act4)._
 
 **`SELECT`**
 
@@ -516,6 +520,7 @@ Using that function turns this query:
 
 ```typescript
 const 
+  authorId = 123,
   query = sql<books.SQL>`SELECT * FROM ${"books"} WHERE ${{ authorId }}`,
   existingBooks: books.Selectable[] = await query.run(pool);
 ```
@@ -523,39 +528,48 @@ const
 Into this:
 
 ```typescript
-const existingBooks = await select(pool, "books", { authorId });
+    const
+      authorId = 123,
+      existingBooks = await select("books", { authorId }).run(pool),
+      titles = existingBooks.map(b => b.);
 ```
 
-What's really nice here is that, thanks to the schemats-generated function signatures, once I've typed in `"books"` as the second argument to the function, TypeScript and VS Code know how to type-check and auto-complete both the third argument (which, if present, must be a `books.Whereable`) and the return value (which must be a `Promise<books.Selectable[]>`).
+What's really nice here is that, thanks to the schemats-generated function signatures, once I've typed in `"books"` as the first argument to the function, TypeScript and VS Code know both how to type-check and auto-complete the second argument (which, if present, must be a `books.Whereable`) and the type by returned by the `run` function (which must be a `books.Selectable[]` or equivalent).
 
 ![Screenshot: inferred return type](README-resources/return-type.png)
 
-The generated function signatures that make this happen look approximately like so:
+The generated function signatures that make this happen look like so:
 
 ```typescript
 interface SelectSignatures {
-  (client: Queryable, table: authors.Table, where?: authors.Whereable, options?: authors.SelectOptions): 
-    Promise<authors.Selectable[]>;
-  (client: Queryable, table: books.Table, where?: books.Whereable, options?: books.SelectOptions): 
-    Promise<books.Selectable[]>;
+  /* books */
+  <C extends books.Column[], L extends SQLFragmentsMap, M extends SelectResultMode = SelectResultMode.Many>(
+    table: books.Table,
+    where: books.Whereable | SQLFragment | AllType,
+    options?: books.SelectOptions<C, L>,
+    mode?: M,
+  ): SQLFragment<books.FullSelectReturnType<C, L, M>>;
+  
+  /* and likewise for every other table: */
+  /* ... */
 }
 ```
 
-The `options` keys include `columns`, which lets me limit the columns to be returned, such as:
+Note that we can omit the `WHERE` clause entirely by passing a symbol called `all`. Note too that the `options` keys include `columns`, which lets us select which columns are returned, such as:
 
 ```typescript
-const allBookTitles = await db.select(db.pool, "books", undefined, { columns: ['title'] });
+const bookTitles = await select("books", all, { columns: ['title'] });
 ```
 
 The return type is then appropriately narrowed to those columns:
 
 ![Screenshot: inferred return type for a subset of columns](README-resources/subset-columns.png)
 
-The `options` keys also include `order`, `limit` and `offset`, so I can do this kind of thing:
+The `options` keys also include `order`, `limit` and `offset`:
 
 ```typescript
-const [lastButOneBook] = await select(pool, "books", { authorId }, 
-  { order: [{ by: "createdAt", direction: "DESC" }], limit: 1, offset: 1 });
+const [lastButOneBook] = await select("books", { authorId }, 
+  { order: [{ by: "createdAt", direction: "DESC" }], limit: 1, offset: 1 }).run(pool);
 ```
 
 The order `by` option is being type-checked and auto-completed, of course.
@@ -565,16 +579,15 @@ I used destructuring assignment here (`[lastButOneBook] = /* ... */`) to account
 To work around this, I also define a `selectOne` helper function. This turns the query above into the following:
 
 ```typescript
-const lastButOneBook = await selectOne(pool, "books", { authorId }, {
-  order: [{ by: "createdAt", direction: 'DESC' }], offset: 1
-});
+const lastButOneBook = await selectOne("books", { authorId }, 
+  { order: [{ by: "createdAt", direction: 'DESC' }], offset: 1 }).run(pool);
 ```
 
-The `limit` option is applied automatically in this case, and the return type following `await` is now, correctly, `books.Selectable | undefined`.
+The `limit` option is now applied automatically, and the return type following `await` is now, correctly, `books.Selectable | undefined`.
 
 "Oh, great", I hear you say, unenthusiastically. "We've come all this way, and you've finished up reinventing the ORMs and query builders you promised we were going to escape". 
 
-Well, I don't think so. This is not an ORM. There's no weird magic going on behind the scenes — not even the merest hint that any semantics are being obscured. There's just a mechanical transformation of some function parameters into a single SQL query, which makes my life easier. One call to `select` means one unsurprising `SELECT` query is issued, and happily both the inputs and outputs of that query are now fully type-checked. 
+Well, I argue not. This is not an ORM. There's no weird magic going on behind the scenes, no abstraction, not even the merest hint that any semantics are being obscured. There's just a mechanical transformation of some function parameters into a single SQL query, which makes my life easier. One call to `select` means one unsurprising `SELECT` query is issued, and happily both the inputs and outputs of that query are now fully type-checked. 
 
 It's also not a query builder. There's no interminable method chaining. There's just type-checking and some additional conveniences applied to writing raw SQL queries, and some shortcut functions that can create basic SQL queries on your behalf. 
 
@@ -585,24 +598,24 @@ With that out of the way, onwards and upwards: `INSERT`s, `UPDATE`s, and (becaus
 The `insert` helper has the same sort of table-specific signatures as select, and it turns the `INSERT` query we saw earlier into this:
 
 ```typescript
-const savedBook = await insert(pool, "books", { 
+const savedBook = await insert("books", { 
   authorId: 123,
   title: "One Hundred Years of Solitude",
-});
+}).run(pool);
 ```
 
 This produces the same query we wrote previously, but now with the addition of a `RETURNING *` clause at the end, meaning that we get back a `books.Selectable` that includes values for all the columns with defaults, such as the `id` serial.
 
-In addition, we can insert multiple rows in one query: the function is written (and has appropriate type signatures) such that, if I instead give it an array-valued `books.Insertable[]`, it gives me an array-valued `books.Selectable[]` back:
+In addition, we can insert multiple rows in one query: the function is written (and has appropriately overloaded type signatures) such that, if I instead give it an array-valued `books.Insertable[]`, it gives me an array-valued `books.Selectable[]` back:
 
 ```typescript
-const savedBooks = await insert(pool, "books", [{ 
+const savedBooks = await insert("books", [{ 
   authorId: 123,
   title: "One Hundred Years of Solitude",
 }, {
   authorId: 456,
   title: "Cheerio, and Thanks for All the Fish",
-}]);
+}]).run(pool);
 ```
 
 **`UPDATE`**
@@ -614,10 +627,10 @@ const
   fishBookId = savedBooks[1].id,
   properTitle = "So Long, and Thanks for All the Fish",
 
-  [updatedBook] = await update(pool, "books", 
+  [updatedBook] = await update("books", 
     { title: properTitle },
     { id: fishBookId }
-  );
+  ).run(pool);
 ```
 
 We can again use a `SQLFragment` in an `update` for further flexibility — for example, if we needed to atomically increment a count. 
@@ -625,12 +638,12 @@ We can again use a `SQLFragment` in an `update` for further flexibility — for 
 In a different context —  for a schema that's not shown — I do something like the following:
 
 ```typescript
-await update(pool, "emailAuthentication", { 
+await update("emailAuthentication", { 
     consecutiveFailedLogins: sql`${self} + 1`,
     lastFailedLogin: sql`now()`,
   },
   { email }
-);
+).run(pool);
 ```
 
 **'UPSERT'**
@@ -670,8 +683,8 @@ const
     accountId: 234,
     latestReceiptData: "bmd1aXNoZWQsIG5v",
   }],
-  result = await upsert(pool, "appleTransactions", newTransactions, 
-    ["environment", "originalTransactionId"]);
+  result = await upsert("appleTransactions", newTransactions, 
+    ["environment", "originalTransactionId"]).run(pool);
 ```
 
 The last argument to `upsert` is the key or array of keys on which there could be a conflict. 
@@ -715,10 +728,159 @@ The `result` of the above query might therefore be:
 }]
 ```
 
-<a name="encore"></a>Encore: Transactions
+<a name="act4"></a>Part 4: In which we extend our `select` shortcut function to allow nested queries
 --
 
-The 'transactions' we just saw were data about people giving us money, but — for added confusion — let's talk for a moment about _database_ transactions (as in: `BEGIN TRANSACTION` and `COMMIT TRANSACTION`).
+Maybe you recall, back in [Part 2](#act2), that we put together a big `LATERAL` join of authors, each with their books, each with its tags. This was a powerful and satisfying application of Postgres' JSON support ... but also a bit of an eyesore, heavy on both punctuation and manually constructed and applied types.
+
+We can do better! Since `SQLFragments` are already designed to contain other `SQLFragments`, it's a pretty small leap to enable `select` calls to be nested inside other `select` calls in order to significantly simplify this kind of `LATERAL` join query.
+
+We achieve this with an additional `options` key, `lateral`, which takes a mapping of property names to nested `select`s, and allows us to rewrite the big join from Part 2 like so:
+
+```typescript
+const authorsBooksTags = await select('authors', all, {
+  lateral: {
+    books: select('books', { authorId: parent('id') }, {
+      lateral: {
+        tags: select('tags', { bookId: parent('id') })
+      }
+    })
+  }
+}).run(pool);
+```
+
+As an additional convenience, the `parent` wrapper function resolves to the name (and given column) of the table in the query one level up. The returned JSON structure pops out fully typed without any additional work:
+
+![Screenshot: inferred return type for a shortcut LATERAL join](README-resources/join-typing.png)
+
+We can also nest `count` and `selectOne` calls, as you might expect. And we can join a table to itself, though in this case we _must_ remember to `alias` it:
+
+Take this new, self-referencing table:
+
+```sql
+CREATE TABLE "employees"
+( "id" SERIAL PRIMARY KEY
+, "name" TEXT NOT NULL
+, "managerId" INTEGER REFERENCES "employees"("id")
+);
+```
+
+Add some employees:
+
+```typescript
+const
+  anna = await insert('employees', { name: 'Anna' }).run(pool),
+  [beth, charlie] = await insert('employees', [
+    { name: 'Beth', managerId: anna.id },
+    { name: 'Charlie', managerId: anna.id },
+  ]).run(pool),
+  dougal = await insert('employees', { name: 'Dougal', managerId: beth.id }).run(pool);
+```
+
+Then query for a summary:
+
+```typescript
+const people = await select('employees', all, {
+  columns: ['name'], 
+  order: [{ by: 'name', direction: 'ASC' }],
+  lateral: {
+    lineManager: selectOne('employees', { id: parent('managerId') },
+      { alias: 'managers', columns: ['name'] }),
+    directReports: count('employees', { managerId: parent('id') },
+      { alias: 'reports' }),
+  },
+}).run(pool);
+
+console.dir(people);
+```
+
+Giving:
+
+```typescript
+[
+  { name: 'Anna', lineManager: null, directReports: 2 },
+  { name: 'Beth', lineManager: { name: 'Anna' }, directReports: 1 },
+  { name: 'Charlie', lineManager: { name: 'Anna' }, directReports: 0 },
+  { name: 'Dougal', lineManager: { name: 'Beth' }, directReports: 0 }
+]
+```
+
+As usual, this is fully typed. If, for example, you were to forget that `directReports` is a count rather than an array of employees, VS Code would soon disabuse you.
+
+![Screenshot: VS Code pointing out that directReports is a number, not an array](README-resources/join-type-error.png)
+
+There are still a couple of limitations to type inference for nested queries. First, there's no check that your join makes sense (column types and `REFERENCES` relationships are not exploited in the `Whereable` term). Second, the result type of a nested `selectOne` always includes `undefined` even if the relevant foreign key is `NOT NULL` and has a `REFERENCES` constraint (in which case we know that Postgres will have enforced the existence of a record).
+
+Nevertheless, this is a handy, flexible — but still transparent and zero-abstraction — way to generate and run complex join queries. 
+
+You're not limited to equating a foreign key to a primary key, either. For example, you could sub-`select` the `N` nearest somethings using PostGIS's [`<-> operator`](https://postgis.net/docs/geometry_distance_knn.html) in your `order` options, with `limit`. You could also return the actual distance using another new `options` key, `extras`, which works in a rather similar way to `lateral`.
+
+Here's a new table:
+
+```sql
+CREATE EXTENSION postgis;
+CREATE TABLE "stores"
+( "id" SERIAL PRIMARY KEY
+, "name" TEXT NOT NULL
+, "geom" GEOMETRY NOT NULL
+);
+```
+
+Now we add some stores:
+
+```typescript
+const gbLocation = (mEast: number, mNorth: number) =>
+  sql`ST_SetSRID(ST_Point(${param(mEast)}, ${param(mNorth)}), 27700)`;
+
+const [brighton] = await insert('stores', [
+  { name: 'Brighton', geom: gbLocation(530590, 104190) },
+  { name: 'London', geom: gbLocation(534930, 179380) },
+  { name: 'Edinburgh', geom: gbLocation(323430, 676130) },
+  { name: 'Newcastle', geom: gbLocation(421430, 563130) },
+  { name: 'Exeter', geom: gbLocation(288430, 92130) },
+]).run(pool);
+```
+
+And then query my local store (Brighton) and its three nearest alternatives:
+
+```typescript
+const localStore = await selectOne('stores', { id: brighton.id }, {
+  columns: ['name'],
+  lateral: {
+    alternatives: select('stores',
+      { id: sql<s.stores.SQL>`${self} <> ${"stores"}.${"id"}` },  // exclude the queried store
+      {
+        alias: 'nearby',
+        columns: ['name'],
+        extras: {
+          km: sql<s.stores.SQL, number>`round(ST_Distance(${"geom"}, ${"stores"}.${"geom"}) / 1000)`
+        },
+        order: [{ by: sql<s.stores.SQL>`${"geom"} <-> ${"stores"}.${"geom"}`, direction: 'ASC' }],
+        limit: 3,
+      })
+  }
+}).run(pool);
+
+console.dir(localStore);
+```
+
+Giving:
+
+```typescript
+{
+  name: 'Brighton',
+  alternatives: [
+    { km: 75, name: 'London' },
+    { km: 242, name: 'Exeter' },
+    { km: 472, name: 'Newcastle' }
+  ]
+}
+```
+
+<a name="act5"></a>Part 5: Transactions
+--
+
+In [Part 3](#act3), we discussed 'transactions' that were were data about people giving us money, but let's talk now about _database_ transactions (as in: `BEGIN TRANSACTION` and `COMMIT TRANSACTION`).
 
 Transactions are an area where I've found TypeORM especially clumsy, and both Sequelize and TypeORM very footgun-prone. Both these ORMs encourage you not to think very often about which DB client will be running your query, and also make it very easy to issue some commands unintentionally outside of an open transaction (in Sequelize, you have to add a `transaction` option on the end of every query; in TypeORM, you have to remember to only use some decorator-injected transaction-aware contraption or other).
 
@@ -770,11 +932,16 @@ npm install
 cd ..
 ```
 
-Then, whenever you change the schema in Postgres, regenerate `src/schema.ts` by running (as one long line):
+Then, whenever you change the schema in Postgres, regenerate `src/schema.ts` by running:
 
 ```sh
-npx ts-node schemats/bin/schemats.ts generate -c postgres://localhost/mostly_ormless -o src/schema.ts 
+npx ts-node schemats/bin/schemats.ts generate \
+  -c postgres://localhost/mostly_ormless \
+  -o src/schema.ts \
+  -x geography_columns geometry_columns raster_columns raster_overviews spatial_ref_sys
 ```
+
+(The `-x` option excludes PostGIS system tables).
 
 Where next?
 --
