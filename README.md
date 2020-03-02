@@ -810,7 +810,7 @@ There are still a couple of limitations to type inference for nested queries. Fi
 
 Nevertheless, this is a handy, flexible — but still transparent and zero-abstraction — way to generate and run complex join queries. 
 
-You're not limited to equating a foreign key to a primary key, either. For example, you could sub-`select` the `N` nearest somethings using PostGIS's [`<-> operator`](https://postgis.net/docs/geometry_distance_knn.html) in your `order` options, with `limit`. You could also return the actual distance using another new `options` key, `extras`, which works in a rather similar way to `lateral`.
+You're not limited to equating a foreign key to a primary key, either. For example, you could sub-`select` the `N` nearest somethings using PostGIS's [`<-> operator`](https://postgis.net/docs/geometry_distance_knn.html) in your `order` options, with `limit`. You could even return the distance to each, using another new `options` key, `extras`, which works in a rather similar way to `lateral`.
 
 Here's a new table:
 
@@ -826,15 +826,15 @@ CREATE TABLE "stores"
 Now we add some stores:
 
 ```typescript
-const gbLocation = (mEast: number, mNorth: number) =>
+const gbPoint = (mEast: number, mNorth: number) =>
   sql`ST_SetSRID(ST_Point(${param(mEast)}, ${param(mNorth)}), 27700)`;
 
 const [brighton] = await insert('stores', [
-  { name: 'Brighton', geom: gbLocation(530590, 104190) },
-  { name: 'London', geom: gbLocation(534930, 179380) },
-  { name: 'Edinburgh', geom: gbLocation(323430, 676130) },
-  { name: 'Newcastle', geom: gbLocation(421430, 563130) },
-  { name: 'Exeter', geom: gbLocation(288430, 92130) },
+  { name: 'Brighton', geom: gbPoint(530590, 104190) },
+  { name: 'London', geom: gbPoint(534930, 179380) },
+  { name: 'Edinburgh', geom: gbPoint(323430, 676130) },
+  { name: 'Newcastle', geom: gbPoint(421430, 563130) },
+  { name: 'Exeter', geom: gbPoint(288430, 92130) },
 ]).run(pool);
 ```
 
@@ -848,12 +848,12 @@ const localStore = await selectOne('stores', { id: brighton.id }, {
       { id: sql<s.stores.SQL>`${self} <> ${"stores"}.${"id"}` },  // exclude the queried store
       {
         alias: 'nearby',
+        order: [{ by: sql<s.stores.SQL>`${"geom"} <-> ${"stores"}.${"geom"}`, direction: 'ASC' }],
+        limit: 3,
         columns: ['name'],
         extras: {
           km: sql<s.stores.SQL, number>`round(ST_Distance(${"geom"}, ${"stores"}.${"geom"}) / 1000)`
         },
-        order: [{ by: sql<s.stores.SQL>`${"geom"} <-> ${"stores"}.${"geom"}`, direction: 'ASC' }],
-        limit: 3,
       })
   }
 }).run(pool);

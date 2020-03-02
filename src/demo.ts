@@ -347,30 +347,30 @@ import * as s from "./schema";
   await (async () => {
     console.log('\n=== Shortcut joins beyond foreign keys ===\n');
 
-    const gbLocation = (mEast: number, mNorth: number) =>
+    const gbPoint = (mEast: number, mNorth: number) =>
       db.sql`ST_SetSRID(ST_Point(${db.param(mEast)}, ${db.param(mNorth)}), 27700)`;
 
     const [brighton] = await db.insert('stores', [
-      { name: 'Brighton', geom: gbLocation(530587, 104192) },
-      { name: 'London', geom: gbLocation(534927, 179382) },
-      { name: 'Edinburgh', geom: gbLocation(323427, 676132) },
-      { name: 'Newcastle', geom: gbLocation(421427, 563132) },
-      { name: 'Exeter', geom: gbLocation(288427, 92132) },
+      { name: 'Brighton', geom: gbPoint(530587, 104192) },
+      { name: 'London', geom: gbPoint(534927, 179382) },
+      { name: 'Edinburgh', geom: gbPoint(323427, 676132) },
+      { name: 'Newcastle', geom: gbPoint(421427, 563132) },
+      { name: 'Exeter', geom: gbPoint(288427, 92132) },
     ]).run(db.pool);
 
     const localStore = await db.selectOne('stores', { id: brighton.id }, {
       columns: ['name'],
       lateral: {
         alternatives: db.select('stores',
-          { id: db.sql<s.stores.SQL>`${db.self} <> ${"stores"}.${"id"}` },  // exclude queried store
+          { id: db.sql<s.stores.SQL>`${db.self} <> ${"stores"}.${"id"}` },  // exclude the queried store
           {
             alias: 'nearby',
+            order: [{ by: db.sql<s.stores.SQL>`${"geom"} <-> ${"stores"}.${"geom"}`, direction: 'ASC' }],
+            limit: 3,
             columns: ['name'],
             extras: {
               km: db.sql<s.stores.SQL, number>`round(ST_Distance(${"geom"}, ${"stores"}.${"geom"}) / 1000)`
             },
-            order: [{ by: db.sql<s.stores.SQL>`${"geom"} <-> ${"stores"}.${"geom"}`, direction: 'ASC' }],
-            limit: 3,
           })
       }
     }).run(db.pool);
