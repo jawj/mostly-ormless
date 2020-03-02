@@ -881,7 +881,7 @@ In [Part 3](#act3), we discussed 'transactions' that were were data about people
 
 Transactions are an area where I've found TypeORM especially clumsy, and both Sequelize and TypeORM very footgun-prone. Both these ORMs encourage you not to think very often about which DB client will be running your query, and also make it very easy to issue some commands unintentionally outside of an open transaction (in Sequelize, you have to add a `transaction` option on the end of every query; in TypeORM, you have to remember to only use some decorator-injected transaction-aware contraption or other).
 
-That's why everything I've shown here requires a client argument to be specified explicitly, and all the above helper functions take that client as their first argument.
+That's why everything I've shown here requires a client/pool argument to be specified explicitly.
 
 To make life easier, I've written a `transaction` helper function that handles issuing a `ROLLBACK` on error, releasing the database client in a `finally` clause (i.e. whether or not an error was thrown), and automatically retrying queries in case of serialization failures.
 
@@ -898,7 +898,7 @@ In addition, it provides a set of hierarchical isolation types, so that you can 
 Try it out
 --
 
-Everything you need to give this approach a spin is included in this repo. Make sure you have node, npm and Postgres installed, then:
+Everything you need to give this approach a spin is included in this repo. Make sure you have node, npm, Postgres and PostGIS installed, then:
 
 ```sh
 cd /some/appropriate/path
@@ -943,4 +943,4 @@ npx ts-node schemats/bin/schemats.ts generate \
 Where next?
 --
 
-If you think this approach could be useful in your own projects, feel free to adopt/adapt it. I'd be interested to hear how you get on. I could of course create an npm library for all this, but I think it's much more truly ORMless if you just take the code (`core.ts` is less than 400 lines), understand it, and make it your own.
+If you think this approach could be useful in your own projects, feel free to adopt/adapt it. I'd be interested to hear how you get on. I may at some stage create an npm library for all this, but arguably it's more truly ORMless if you just take the code (`core.ts` is less than 500 lines), understand it, and make it your own.
