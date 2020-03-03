@@ -943,7 +943,7 @@ npx ts-node schemats/bin/schemats.ts generate \
   -x geography_columns geometry_columns raster_columns raster_overviews spatial_ref_sys
 ```
 
-(The `-x` option excludes PostGIS system tables).
+(The `-x` option excludes tables: here it excludes the PostGIS system tables).
 
 Where next?
 --
