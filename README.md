@@ -746,9 +746,15 @@ const authorsBooksTags = await select('authors', all, {
 }).run(pool);
 ```
 
-As an additional convenience, the `parent` wrapper function resolves to the name (and given column) of the table in the query one level up. The returned JSON structure pops out fully typed without any additional work:
+As well as generating [the query](README-resources/author-book-tags.sql) for you, this of course has the returned JSON structure pop out fully typed without any additional work:
 
 ![Screenshot: inferred return type for a shortcut LATERAL join](README-resources/join-typing.png)
+
+Did you spot the `parent` wrapper function? As you might have guessed, this resolves to the name — and given column — of the table in the query one level up. It's a minor convenience: in the first example, you could just as well write:
+```typescript
+sql`${"authors"}.${"id"}`
+```
+
 
 We can also nest `count` and `selectOne` calls, as you might expect. And we can join a table to itself, though in this case we _must_ remember to `alias` it:
 
@@ -791,7 +797,7 @@ const people = await select('employees', all, {
 console.dir(people);
 ```
 
-Giving:
+Giving (via [generated query](README-resources/employees.sql)):
 
 ```typescript
 [
@@ -860,7 +866,7 @@ const localStore = await selectOne('stores', { id: brighton.id }, {
 console.dir(localStore);
 ```
 
-This gives ([see query](README-resources/stores.sql)):
+This gives (via [generated query](README-resources/stores.sql)):
 
 ```typescript
 {

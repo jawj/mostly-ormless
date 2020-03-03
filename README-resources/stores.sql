@@ -13,10 +13,9 @@ SELECT jsonb_build_object('name', name)
                             ) AS result
                       FROM stores AS nearby
                      WHERE id != stores.id
-                  ORDER BY geom != stores.geom ASC
+                  ORDER BY geom <-> stores.geom ASC
                      LIMIT 3
                  ) AS sq_nearby
         ) AS cj_alternatives ON true
  WHERE id = $1
  LIMIT 1;
- 
