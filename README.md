@@ -860,7 +860,7 @@ const localStore = await selectOne('stores', { id: brighton.id }, {
 console.dir(localStore);
 ```
 
-Giving:
+This gives ([see query](README-resources/stores.sql)):
 
 ```typescript
 {
