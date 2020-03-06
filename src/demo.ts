@@ -36,7 +36,9 @@ import * as s from "./schema";
     ]).run(db.pool);
 
     await db.insert("tags", [
-      { tag: "Spanish", bookId: insertedBooks[1].id },
+      { tag: "Romance", bookId: insertedBooks[0].id },
+      { tag: "19th century", bookId: insertedBooks[0].id },
+      { tag: "Lovesickness", bookId: insertedBooks[1].id },
       { tag: "1980s", bookId: insertedBooks[1].id },
     ]).run(db.pool);
 
@@ -225,7 +227,7 @@ import * as s from "./schema";
     const savedBooks = await db.insert("books",
       [{
         authorId: 123,
-        title: "One Hundred Years of Solitude",
+        title: "News of a Kidnapping",
       }, {
         authorId: 456,
         title: "Cheerio, and Thanks for All the Fish",

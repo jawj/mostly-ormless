@@ -1,5 +1,6 @@
 import * as pg from 'pg';
 import { isDatabaseError } from './pgErrors';
+import config from './config';
 
 import {
   InsertSignatures,
@@ -16,13 +17,13 @@ import {
   UpsertSignatures,
 } from './schema';
 
-const config = {  // in use, you'll probably import this from somewhere
-    dbURL: 'postgresql://localhost/mostly_ormless',
-    dbTransactionAttempts: 5,
-    dbTransactionRetryDelayRange: [25, 125],
-    verbose: true,
-};
-  
+export interface DBConfig {
+  dbURL: string,
+  dbTransactionAttempts: number,
+  dbTransactionRetryDelayRange: [number, number],
+  verbose: boolean,
+}
+
 export const pool = new pg.Pool({ connectionString: config.dbURL });
 
 
@@ -221,7 +222,10 @@ export const select: SelectSignatures = function (
       // we need the aggregate to sit in a sub-SELECT in order to keep ORDER and LIMIT working as usual
       sql<SQL>`SELECT coalesce(jsonb_agg(result), '[]') AS result FROM (${rowsQuery}) AS ${raw(`"sq_${table}"`)}`;
   
-  query.runResultTransform = (qr) => qr.rows[0].result;
+  query.runResultTransform = mode === SelectResultMode.Count ? 
+    (qr) => Number(qr.rows[0].result) :
+    (qr) => qr.rows[0].result;
+  
   return query;
 }
 
