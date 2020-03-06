@@ -38,11 +38,7 @@ export type SelfType = typeof self;
 export const all = Symbol('all');
 export type AllType = typeof all;
 
-// see https://github.com/Microsoft/TypeScript/issues/3496#issuecomment-128553540
-export type JSONValue = null | boolean | number | string | JSONObject | JSONArray;
-export interface JSONObject { [k: string]: JSONValue; }
-export interface JSONArray extends Array<JSONValue> { }
-
+export type JSONValue = null | boolean | number | string | { [k: string]: JSONValue; } | JSONValue[];
 
 export class Parameter { constructor(public value: any) { } }
 export function param(x: any) { return new Parameter(x); }
@@ -224,7 +220,7 @@ export const select: SelectSignatures = function (
   
   query.runResultTransform = mode === SelectResultMode.Count ? 
     (qr) => Number(qr.rows[0].result) :
-    (qr) => qr.rows[0].result;
+    (qr) => qr.rows[0]?.result;
   
   return query;
 }
