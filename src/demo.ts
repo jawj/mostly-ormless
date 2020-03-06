@@ -400,5 +400,23 @@ import * as s from "./schema";
     console.log(result);
   })();
 
+  await (async () => {
+    console.log('\n=== Dates ===\n');
+    
+    const
+      oneBooks: s.books.Selectable[] =
+        await db.sql<s.books.SQL>`SELECT * FROM ${"books"} LIMIT 1`.run(db.pool),
+      oneBook = oneBooks[0],
+      someActualDate = oneBook.createdAt;
+    
+    console.log(someActualDate.constructor, someActualDate);
+
+    const
+      book = await db.selectOne('books', db.all, { columns: ['createdAt'] }).run(db.pool),
+      someSoCalledDate = book!.createdAt;
+
+    console.log(someSoCalledDate.constructor, someSoCalledDate);
+  })();
+
   await db.pool.end();
 })();

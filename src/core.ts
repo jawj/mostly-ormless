@@ -40,6 +40,8 @@ export type AllType = typeof all;
 
 export type JSONValue = null | boolean | number | string | { [k: string]: JSONValue; } | JSONValue[];
 
+export type DateString = string;
+
 export class Parameter { constructor(public value: any) { } }
 export function param(x: any) { return new Parameter(x); }
 
@@ -219,6 +221,8 @@ export const select: SelectSignatures = function (
       sql<SQL>`SELECT coalesce(jsonb_agg(result), '[]') AS result FROM (${rowsQuery}) AS ${raw(`"sq_${table}"`)}`;
   
   query.runResultTransform = mode === SelectResultMode.Count ? 
+    // note: pg deliberately returns strings for int8 in case 64-bit numbers overflow
+    // (see https://github.com/brianc/node-pg-types#use), but we assume counts aren't that big
     (qr) => Number(qr.rows[0].result) :
     (qr) => qr.rows[0]?.result;
   
