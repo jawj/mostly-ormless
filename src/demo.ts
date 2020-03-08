@@ -215,6 +215,16 @@ import * as s from "./schema";
 
     console.log(numberOfBooks);
 
+    const noBooksAtAll = await db.select("books", { authorId: -1 }).run(db.pool);
+
+    console.log(noBooksAtAll);
+
+    const noBookAtAll = await db.selectOne("books", { authorId: -1 }).run(db.pool);
+    console.log(noBookAtAll);
+
+    const zeroBookCount = await db.count("books", { authorId: -1 }).run(db.pool);
+    console.log(zeroBookCount);
+
     const savedBooks = await db.insert("books",
       [{
         authorId: 123,
@@ -370,6 +380,26 @@ import * as s from "./schema";
 
 
   await (async () => {
+    console.log('\n=== Joins with nothing returned ===\n');
+
+    const authorWithNoBooks = await db.selectOne('authors', db.all, {
+      lateral: { bearBooks: db.select('books', { authorId: db.parent('id'), title: db.sql`${db.self} LIKE '%bear%'` }) }
+    }).run(db.pool);
+
+    console.log(authorWithNoBooks);
+
+    const authorWithZeroCountBooks = await db.selectOne('authors', db.all, {
+      lateral: { bearBooks: db.count('books', { authorId: db.parent('id'), title: db.sql`${db.self} LIKE '%bear%'` }) }
+    }).run(db.pool);
+
+    console.log(authorWithZeroCountBooks);
+
+    const bookWithNoAuthor = await db.selectOne('books', db.all, { lateral: { author: db.selectOne('authors', { id: -1 }) } }).run(db.pool);
+
+    console.log(bookWithNoAuthor);
+  })();
+
+  await (async () => {
     console.log('\n=== Date complications ===\n');
 
     const
@@ -389,19 +419,19 @@ import * as s from "./schema";
 
     // this fails to find anything, because JS date conversion truncates μs to ms
     const bookDatedByDate = await db.selectOne('books', { createdAt: someActualDate }).run(db.pool);
-    console.log('by date:', bookDatedByDate);
+    console.log(bookDatedByDate);
 
     // therefore this also fails
     const bookDatedByConvertedDate = await db.selectOne('books', { createdAt: someConvertedDate }).run(db.pool);
-    console.log('by converted date:', bookDatedByConvertedDate);
+    console.log(bookDatedByConvertedDate);
 
     // but this works
     const bookDatedByTruncDate = await db.selectOne('books', { createdAt: db.sql<db.SQL>`date_trunc('milliseconds', ${db.self}) = ${db.param(someActualDate)}` }).run(db.pool);
-    console.log('by truncated date:', bookDatedByTruncDate);
+    console.log(bookDatedByTruncDate);
 
-    // and this also works
+    // and this also works, more sanely
     const bookDatedByString = await db.selectOne('books', { createdAt: someSoCalledDate }).run(db.pool);
-    console.log('by string:', bookDatedByString);
+    console.log(bookDatedByString);
   })();
 
   await (async () => {
