@@ -39,6 +39,7 @@ export const all = Symbol('all');
 export type AllType = typeof all;
 
 export type JSONValue = null | boolean | number | string | { [k: string]: JSONValue; } | JSONValue[];
+export type JSONArray = JSONValue[];
 
 export type DateString = string;
 
@@ -81,9 +82,12 @@ export const insert: InsertSignatures = function
     valuesSQL = Array.isArray(completedValues) ?
       mapWithSeparator(completedValues as Insertable[], sql<SQL>`, `, v => sql<SQL>`(${vals(v)})`) :
       sql<SQL>`(${vals(completedValues)})`,
-    query = sql<SQL>`INSERT INTO ${table} (${colsSQL}) VALUES ${valuesSQL} RETURNING *`;
+    query = sql<SQL>`INSERT INTO ${table} (${colsSQL}) VALUES ${valuesSQL} RETURNING to_jsonb(${table}.*) AS result`;
 
-  if (!Array.isArray(completedValues)) query.runResultTransform = (qr) => qr.rows[0];
+  query.runResultTransform = Array.isArray(completedValues) ?
+    (qr) => qr.rows.map(r => r.result) :
+    (qr) => qr.rows[0].result;
+  
   return query;
 }
 
@@ -112,9 +116,12 @@ export const upsert: UpsertSignatures = function
   // the added-on $action = 'INSERT' | 'UPDATE' key takes after SQL Server's approach to MERGE
   // (and on the use of xmax for this purpose, see: https://stackoverflow.com/questions/39058213/postgresql-upsert-differentiate-inserted-and-updated-rows-using-system-columns-x)
 
-  const query = sql<SQL>`INSERT INTO ${table} (${colsSQL}) VALUES ${valuesSQL} ON CONFLICT (${uniqueColsSQL}) DO UPDATE SET (${updateColsSQL}) = ROW(${updateValuesSQL}) RETURNING *, CASE xmax WHEN 0 THEN 'INSERT' ELSE 'UPDATE' END AS "$action"`;
+  const query = sql<SQL>`INSERT INTO ${table} (${colsSQL}) VALUES ${valuesSQL} ON CONFLICT (${uniqueColsSQL}) DO UPDATE SET (${updateColsSQL}) = ROW(${updateValuesSQL}) RETURNING to_jsonb(${table}.*) || jsonb_build_object('$action', CASE xmax WHEN 0 THEN 'INSERT' ELSE 'UPDATE' END) AS result`;
 
-  if (!Array.isArray(completedValues)) query.runResultTransform = (qr) => qr.rows[0];
+  query.runResultTransform = Array.isArray(completedValues) ?
+    (qr) => qr.rows.map(r => r.result) :
+    (qr) => qr.rows[0].result;
+  
   return query;
 }
 
@@ -126,14 +133,18 @@ export const update: UpdateSignatures = function (
   // note: the ROW() constructor below is required in Postgres 10+ if we're updating a single column
   // more info: https://www.postgresql-archive.org/Possible-regression-in-UPDATE-SET-lt-column-list-gt-lt-row-expression-gt-with-just-one-single-column0-td5989074.html
 
-  const query = sql<SQL>`UPDATE ${table} SET (${cols(values)}) = ROW(${vals(values)}) WHERE ${where} RETURNING *`;
+  const query = sql<SQL>`UPDATE ${table} SET (${cols(values)}) = ROW(${vals(values)}) WHERE ${where} RETURNING to_jsonb(${table}.*) AS result`;
+
+  query.runResultTransform = (qr) => qr.rows.map(r => r.result);
   return query;
 }
 
 export const deletes: DeleteSignatures = function  // sadly, delete is a reserved word
   (table: Table, where: Whereable | SQLFragment): SQLFragment {
 
-  const query = sql<SQL>`DELETE FROM ${table} WHERE ${where} RETURNING *`;
+  const query = sql<SQL>`DELETE FROM ${table} WHERE ${where} RETURNING to_jsonb(${table}.*) AS result`;
+  
+  query.runResultTransform = (qr) => qr.rows.map(r => r.result);
   return query;
 }
 

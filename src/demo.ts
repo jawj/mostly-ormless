@@ -9,7 +9,7 @@ import * as s from "./schema";
     const allTables: s.AllTables = ["appleTransactions", "authors", "books", "emailAuthentication", "employees", "stores", "tags"];
     await db.truncate(allTables, "CASCADE").run(db.pool);
 
-    await db.insert("authors", [
+    const insertedAuthors = await db.insert("authors", [
       {
         id: 1,
         name: "Jane Austen",
@@ -24,6 +24,8 @@ import * as s from "./schema";
         isLiving: false,
       }
     ]).run(db.pool);
+
+    console.log(insertedAuthors);
     
     const insertedBooks = await db.insert("books", [
       {
@@ -35,13 +37,16 @@ import * as s from "./schema";
       }
     ]).run(db.pool);
 
-    await db.insert("tags", [
+    console.log(insertedBooks);
+
+    const insertedTags = await db.insert("tags", [
       { tag: "Romance", bookId: insertedBooks[0].id },
       { tag: "19th century", bookId: insertedBooks[0].id },
       { tag: "Lovesickness", bookId: insertedBooks[1].id },
       { tag: "1980s", bookId: insertedBooks[1].id },
     ]).run(db.pool);
 
+    console.log(insertedTags);
   })();
 
   await (async () => {
@@ -104,24 +109,6 @@ import * as s from "./schema";
       bookAuthors: bookAuthorSelectable[] = await query.run(db.pool);
     
     console.log(bookAuthors);
-
-    const q = await db.select('books', db.all, {
-      columns: ['title'],
-      lateral: {
-        author: db.selectOne('authors', { id: db.parent('authorId') }, {
-          columns: ['name', 'isLiving'],
-          lateral: { booksWritten: db.count('books', { authorId: db.parent('id') }) }
-        })
-      }
-    });
-    const r = await q.run(db.pool);
-    console.dir(r, { depth: null });
-    console.log(r.map(b => b.author?.booksWritten));
-
-    const one = await db.selectOne('books', db.all, { limit: 1 }).run(db.pool);
-    console.log(one);
-    const count = await db.count('books', db.all, { columns: ['title'] }).run(db.pool);
-    console.log(count);
   })();
 
   await (async () => {
@@ -224,6 +211,10 @@ import * as s from "./schema";
 
     console.log(lastButOneBook);
 
+    const numberOfBooks = await db.count("books", db.all).run(db.pool);
+
+    console.log(numberOfBooks);
+
     const savedBooks = await db.insert("books",
       [{
         authorId: 123,
@@ -254,14 +245,15 @@ import * as s from "./schema";
   await (async () => {
     console.log('\n=== Shortcut UPDATE with a SQLFragment in an Updatable ===\n');
 
-    const email = "me@privacy.net";
-
-    await db.insert("emailAuthentication", { email }).run(db.pool);
-
-    await db.update("emailAuthentication", {
-      consecutiveFailedLogins: db.sql`${db.self} + 1`,
-      lastFailedLogin: db.sql`now()`,
-    }, { email }).run(db.pool);
+    const
+      email = "me@privacy.net",
+      insertedEmail = await db.insert("emailAuthentication", { email }).run(db.pool),
+      updatedEmail = await db.update("emailAuthentication", {
+        consecutiveFailedLogins: db.sql`${db.self} + 1`,
+        lastFailedLogin: db.sql`now()`,
+      }, { email }).run(db.pool);
+    
+    console.log(insertedEmail, updatedEmail);
   })();
 
   await (async () => {
@@ -296,9 +288,7 @@ import * as s from "./schema";
     console.log('\n=== Shortcut one-to-many join ===\n');
     
     const q = await db.select('authors', db.all, {
-      lateral: {
-        books: db.select('books', { authorId: db.parent('id') })
-      }
+      lateral: { books: db.select('books', { authorId: db.parent('id') }) }
     });
     const r = await q.run(db.pool);
     console.dir(r, { depth: null });
@@ -349,15 +339,15 @@ import * as s from "./schema";
   await (async () => {
     console.log('\n=== Shortcut joins beyond foreign keys ===\n');
 
-    const gbPoint = (mEast: number, mNorth: number) =>
+    const OSGB36Point = (mEast: number, mNorth: number) =>
       db.sql`ST_SetSRID(ST_Point(${db.param(mEast)}, ${db.param(mNorth)}), 27700)`;
 
     const [brighton] = await db.insert('stores', [
-      { name: 'Brighton', geom: gbPoint(530587, 104192) },
-      { name: 'London', geom: gbPoint(534927, 179382) },
-      { name: 'Edinburgh', geom: gbPoint(323427, 676132) },
-      { name: 'Newcastle', geom: gbPoint(421427, 563132) },
-      { name: 'Exeter', geom: gbPoint(288427, 92132) },
+      { name: 'Brighton', geom: OSGB36Point(530587, 104192) },
+      { name: 'London', geom: OSGB36Point(534927, 179382) },
+      { name: 'Edinburgh', geom: OSGB36Point(323427, 676132) },
+      { name: 'Newcastle', geom: OSGB36Point(421427, 563132) },
+      { name: 'Exeter', geom: OSGB36Point(288427, 92132) },
     ]).run(db.pool);
 
     const localStore = await db.selectOne('stores', { id: brighton.id }, {
@@ -378,6 +368,42 @@ import * as s from "./schema";
     console.log(localStore);
   })();
 
+
+  await (async () => {
+    console.log('\n=== Date complications ===\n');
+
+    const
+      oneBooks: s.books.Selectable[] =
+        await db.sql<s.books.SQL>`SELECT * FROM ${"books"} LIMIT 1`.run(db.pool),
+      oneBook = oneBooks[0],
+      someActualDate = oneBook.createdAt;
+
+    console.log(someActualDate.constructor, someActualDate);
+
+    const
+      book = await db.selectOne('books', db.all, { columns: ['createdAt'] }).run(db.pool),
+      someSoCalledDate = book!.createdAt,
+      someConvertedDate = new Date(someSoCalledDate);
+
+    console.log(someSoCalledDate.constructor, someSoCalledDate, someConvertedDate);
+
+    // this fails to find anything, because JS date conversion truncates μs to ms
+    const bookDatedByDate = await db.selectOne('books', { createdAt: someActualDate }).run(db.pool);
+    console.log('by date:', bookDatedByDate);
+
+    // therefore this also fails
+    const bookDatedByConvertedDate = await db.selectOne('books', { createdAt: someConvertedDate }).run(db.pool);
+    console.log('by converted date:', bookDatedByConvertedDate);
+
+    // but this works
+    const bookDatedByTruncDate = await db.selectOne('books', { createdAt: db.sql<db.SQL>`date_trunc('milliseconds', ${db.self}) = ${db.param(someActualDate)}` }).run(db.pool);
+    console.log('by truncated date:', bookDatedByTruncDate);
+
+    // and this also works
+    const bookDatedByString = await db.selectOne('books', { createdAt: someSoCalledDate }).run(db.pool);
+    console.log('by string:', bookDatedByString);
+  })();
+
   await (async () => {
     console.log('\n=== Transaction ===\n');
     const
@@ -385,11 +411,12 @@ import * as s from "./schema";
       result = await db.transaction(db.Isolation.Serializable, async txnClient => {
 
         const emailAuth = await db.selectOne("emailAuthentication", { email }).run(txnClient);
-        console.log(emailAuth?.consecutiveFailedLogins);
+        
+        console.log(emailAuth);
 
         // do stuff with email record -- e.g. check a password, handle successful login --
         // but remember everything non-DB-related in this function must be idempotent
-        // since it might be called several times if there are serialization failures
+        // since it might be called several times in case of serialization failures
         
         return db.update("emailAuthentication", {
           consecutiveFailedLogins: db.sql`${db.self} + 1`,
@@ -398,24 +425,6 @@ import * as s from "./schema";
       });
     
     console.log(result);
-  })();
-
-  await (async () => {
-    console.log('\n=== Dates ===\n');
-    
-    const
-      oneBooks: s.books.Selectable[] =
-        await db.sql<s.books.SQL>`SELECT * FROM ${"books"} LIMIT 1`.run(db.pool),
-      oneBook = oneBooks[0],
-      someActualDate = oneBook.createdAt;
-    
-    console.log(someActualDate.constructor, someActualDate);
-
-    const
-      book = await db.selectOne('books', db.all, { columns: ['createdAt'] }).run(db.pool),
-      someSoCalledDate = book!.createdAt;
-
-    console.log(someSoCalledDate.constructor, someSoCalledDate);
   })();
 
   await db.pool.end();
