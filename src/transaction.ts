@@ -38,9 +38,15 @@ export async function transaction<T, M extends Isolation>(
   isolationMode: M,
   callback: (client: TxnClient<M>) => Promise<T>
 ): Promise<T> {
+
+  const
+    txnId = txnSeq++,
+    txnClient = await pool.connect() as TxnClient<typeof isolationMode>,
+    maxAttempts = config.transactionAttemptsMax,
+    { minMs, maxMs } = config.transactionRetryDelay;
   
-  const txnId = txnSeq++, txnClient = await pool.connect() as TxnClient<typeof isolationMode>, maxAttempts = config.dbMaxTransactionAttempts, [delayMin, delayMax] = config.dbTransactionRetryDelayMsRange;
   txnClient.transactionMode = isolationMode;
+
   try {
     for (let attempt = 1; ; attempt++) {
       try {
@@ -51,33 +57,33 @@ export async function transaction<T, M extends Isolation>(
         await sql`COMMIT`.run(txnClient);
 
         return result;
-      }
-      catch (err) {
+
+      } catch (err) {
         await sql`ROLLBACK`.run(txnClient);
 
         // on trapping the following two rollback error codes, see:
         // https://www.postgresql.org/message-id/1368066680.60649.YahooMailNeo@web162902.mail.bf1.yahoo.com
         // this is also a good read:
         // https://www.enterprisedb.com/blog/serializable-postgresql-11-and-beyond
+
         if (isDatabaseError(err, "TransactionRollback_SerializationFailure", "TransactionRollback_DeadlockDetected")) {
           if (attempt < maxAttempts) {
-            const delayBeforeRetry = Math.round(delayMin + (delayMax - delayMin) * Math.random());
+            const delayBeforeRetry = Math.round(minMs + (maxMs - minMs) * Math.random());
             console.log(`Transaction #${txnId} rollback (code ${err.code}) on attempt ${attempt} of ${maxAttempts}, retrying in ${delayBeforeRetry}ms`);
-
             await wait(delayBeforeRetry);
-          }
-          else {
+
+          } else {
             console.log(`Transaction #${txnId} rollback (code ${err.code}) on attempt ${attempt} of ${maxAttempts}, giving up`);
             throw err;
           }
-        }
-        else {
+
+        } else {
           throw err;
         }
       }
     }
-  }
-  finally {
+
+  } finally {
     (txnClient as any).transactionMode = undefined;
     txnClient.release();
   }
