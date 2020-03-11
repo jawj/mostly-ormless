@@ -21,11 +21,14 @@ import {
     ParentColumn,
     DefaultType,
     AllType,
-    UpsertAction,
-    SelectResultMode,
     SQLFragmentsMap,
     PromisedSQLFragmentReturnTypeMap,
 } from "./core";
+
+import {
+    UpsertAction,
+    SelectResultMode,
+} from "./shortcuts";
 
 export type appleEnvironment = 'PROD' | 'Sandbox';
 export namespace every {

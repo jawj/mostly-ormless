@@ -1,5 +1,6 @@
 
 export const config = {
+  // defaults
   transactionAttemptsMax: 5,
   transactionRetryDelay: { minMs: 25, maxMs: 250 },
   verbose: false,
