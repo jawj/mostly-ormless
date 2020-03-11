@@ -1,5 +1,4 @@
 import * as pg from 'pg';
-import { isDatabaseError } from './pgErrors';
 
 import {
   InsertSignatures,
@@ -16,25 +15,9 @@ import {
   UpsertSignatures,
 } from './schema';
 
-
-// === configuration ===
-
-export interface Config {
-  dbMaxTransactionAttempts: number,
-  dbTransactionRetryDelayMsRange: [number, number],
-  verbose: boolean,
-}
-
-export type NewConfig = Partial<Config>;
-
-const config: Config = {  // default config
-  dbMaxTransactionAttempts: 5,
-  dbTransactionRetryDelayMsRange: [25, 250],
-  verbose: false,
-};
-
-export const getConfig = () => Object.assign({}, config);  // don't let anyone mess with the original
-export const setConfig = (newConfig: NewConfig) => Object.assign(config, newConfig);
+import { completeKeysWithDefault, mapWithSeparator } from './helpers';
+import { config } from './config';
+import { TxnClient } from './transaction';
 
 
 // === symbols, types, wrapper classes and shortcuts ===
@@ -80,9 +63,10 @@ export type PromisedSQLFragmentReturnType<R extends SQLFragment<any>> = Promised
 export type PromisedSQLFragmentReturnTypeMap<L extends SQLFragmentsMap> = { [K in keyof L]: PromisedSQLFragmentReturnType<L[K]> };
 
 
-// === simple query helpers ===
+// === query helpers ===
 
 export type Queryable = pg.Pool | TxnClient<any>;
+
 
 export const insert: InsertSignatures = function
   (table: Table, values: Insertable | Insertable[]): SQLFragment<any> {
@@ -136,6 +120,7 @@ export const upsert: UpsertSignatures = function
   return query;
 }
 
+
 export const update: UpdateSignatures = function (
   table: Table,
   values: Updatable,
@@ -158,6 +143,7 @@ export const deletes: DeleteSignatures = function  // sadly, delete is a reserve
   query.runResultTransform = (qr) => qr.rows.map(r => r.result);
   return query;
 }
+
 
 type TruncateIdentityOpts = 'CONTINUE IDENTITY' | 'RESTART IDENTITY';
 type TruncateForeignKeyOpts = 'RESTRICT' | 'CASCADE';
@@ -251,6 +237,7 @@ export const select: SelectSignatures = function (
   return query;
 }
 
+
 export const selectOne: SelectOneSignatures = function (
   table: Table,
   where: Whereable | SQLFragment | AllType = all,
@@ -264,6 +251,7 @@ export const selectOne: SelectOneSignatures = function (
   return select(<any>table, <any>where, <any>options, SelectResultMode.One);
 }
 
+
 export const count: CountSignatures = function (
   table: Table,
   where: Whereable | SQLFragment | AllType = all,
@@ -273,92 +261,6 @@ export const count: CountSignatures = function (
   return select(<any>table, <any>where, <any>options, SelectResultMode.Count);
 }
 
-
-// === transactions support ===
-
-export enum Isolation {
-  // these are the only meaningful values in Postgres: 
-  // see https://www.postgresql.org/docs/11/sql-set-transaction.html
-
-  Serializable = "SERIALIZABLE",
-  RepeatableRead = "REPEATABLE READ",
-  ReadCommitted = "READ COMMITTED",
-  SerializableRO = "SERIALIZABLE, READ ONLY",
-  RepeatableReadRO = "REPEATABLE READ, READ ONLY",
-  ReadCommittedRO = "READ COMMITTED, READ ONLY",
-  SerializableRODeferrable = "SERIALIZABLE, READ ONLY, DEFERRABLE",
-}
-
-export namespace TxnSatisfying {
-  export type Serializable = Isolation.Serializable;
-  export type RepeatableRead = Serializable | Isolation.RepeatableRead;
-  export type ReadCommitted = RepeatableRead | Isolation.ReadCommitted;
-  export type SerializableRO = Serializable | Isolation.SerializableRO;
-  export type RepeatableReadRO = SerializableRO | RepeatableRead | Isolation.RepeatableReadRO;
-  export type ReadCommittedRO = RepeatableReadRO | ReadCommitted | Isolation.ReadCommittedRO;
-  export type SerializableRODeferrable = SerializableRO | Isolation.SerializableRODeferrable;
-}
-
-export interface TxnClient<T extends Isolation | undefined> extends pg.PoolClient {
-  transactionMode: T;
-}
-
-let txnSeq = 0;
-
-export async function transaction<T, M extends Isolation>(
-  pool: pg.Pool, isolationMode: M, callback: (client: TxnClient<M>) => Promise<T>
-): Promise<T> {
-
-  const
-    txnId = txnSeq++,
-    txnClient = await pool.connect() as TxnClient<typeof isolationMode>,
-    maxAttempts = config.dbMaxTransactionAttempts,
-    [delayMin, delayMax] = config.dbTransactionRetryDelayMsRange;
-
-  txnClient.transactionMode = isolationMode;
-
-  try {
-    for (let attempt = 1; ; attempt++) {
-      try {
-        if (attempt > 1) console.log(`Retrying transaction #${txnId}, attempt ${attempt} of ${maxAttempts}`)
-
-        await sql`START TRANSACTION ISOLATION LEVEL ${raw(isolationMode)}`.run(txnClient);
-        const result = await callback(txnClient);
-        await sql`COMMIT`.run(txnClient);
-        return result;
-
-      } catch (err) {
-        await sql`ROLLBACK`.run(txnClient);
-
-        // on trapping the following two rollback error codes, see:
-        // https://www.postgresql.org/message-id/1368066680.60649.YahooMailNeo@web162902.mail.bf1.yahoo.com
-        // this is also a good read:
-        // https://www.enterprisedb.com/blog/serializable-postgresql-11-and-beyond
-        if (isDatabaseError(err,
-          "TransactionRollback_SerializationFailure", "TransactionRollback_DeadlockDetected")) {
-          
-          if (attempt < maxAttempts) {
-            const delayBeforeRetry = Math.round(delayMin + (delayMax - delayMin) * Math.random());
-            console.log(`Transaction #${txnId} rollback (code ${err.code}) on attempt ${attempt} of ${maxAttempts}, retrying in ${delayBeforeRetry}ms`);
-
-            await wait(delayBeforeRetry);
-
-          } else {
-            console.log(`Transaction #${txnId} rollback (code ${err.code}) on attempt ${attempt} of ${maxAttempts}, giving up`);
-
-            throw err;
-          }
-
-        } else {
-          throw err;
-        }
-      }
-    }
-  } finally {
-    (txnClient as any).transactionMode = undefined;
-    txnClient.release();
-  }
-}
 
 // === SQL tagged template strings ===
 
@@ -490,27 +392,4 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
   }
 }
 
-// === supporting functions ===
 
-const wait = (delayMs: number) => new Promise(resolve => setTimeout(resolve, delayMs));
-
-const mapWithSeparator = <TIn, TSep, TOut>(
-  arr: TIn[],
-  separator: TSep,
-  cb: (x: TIn, i: number, a: typeof arr) => TOut
-): (TOut | TSep)[] => {
-
-  const result: (TOut | TSep)[] = [];
-  for (let i = 0, len = arr.length; i < len; i++) {
-    if (i > 0) result.push(separator);
-    result.push(cb(arr[i], i, arr));
-  }
-  return result;
-}
-
-const completeKeysWithDefault = <T extends object>(objs: T[]): T[] => {
-  // e.g. [{ x: 1 }, { y: 2 }] => [{ x: 1, y: Default }, { x: Default, y: 2}]
-  const unionKeys = Object.assign({}, ...objs);
-  for (let k in unionKeys) unionKeys[k] = Default;
-  return objs.map(o => Object.assign({}, unionKeys, o));
-}

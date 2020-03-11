@@ -1,8 +1,10 @@
 import * as pg from 'pg';
 import * as db from "./core";
+import * as Config from "./config";
+import * as Isolation from "./transaction";
 import * as s from "./schema";
 
-db.setConfig({ verbose: true });
+Config.setConfig({ verbose: true });
 const pool = new pg.Pool({ connectionString: 'postgresql://localhost/mostly_ormless' });
 
 (async () => {
@@ -442,7 +444,7 @@ const pool = new pg.Pool({ connectionString: 'postgresql://localhost/mostly_orml
     console.log('\n=== Transaction ===\n');
     const
       email = "me@privacy.net",
-      result = await db.transaction(pool, db.Isolation.Serializable, async txnClient => {
+      result = await Isolation.transaction(pool, Isolation.Isolation.Serializable, async txnClient => {
 
         const emailAuth = await db.selectOne("emailAuthentication", { email }).run(txnClient);
         
