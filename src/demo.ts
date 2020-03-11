@@ -1,5 +1,9 @@
+import * as pg from 'pg';
 import * as db from "./core";
 import * as s from "./schema";
+
+db.setConfig({ verbose: true });
+const pool = new pg.Pool({ connectionString: 'postgresql://localhost/mostly_ormless' });
 
 (async () => {
 
@@ -7,7 +11,7 @@ import * as s from "./schema";
     
     // setup (uses shortcut functions)
     const allTables: s.AllTables = ["appleTransactions", "authors", "books", "emailAuthentication", "employees", "stores", "tags"];
-    await db.truncate(allTables, "CASCADE").run(db.pool);
+    await db.truncate(allTables, "CASCADE").run(pool);
 
     const insertedAuthors = await db.insert("authors", [
       {
@@ -23,7 +27,7 @@ import * as s from "./schema";
         name: "Douglas Adams",
         isLiving: false,
       }
-    ]).run(db.pool);
+    ]).run(pool);
 
     console.log(insertedAuthors);
     
@@ -35,7 +39,7 @@ import * as s from "./schema";
         authorId: 123,
         title: "Love in the Time of Cholera"
       }
-    ]).run(db.pool);
+    ]).run(pool);
 
     console.log(insertedBooks);
 
@@ -44,7 +48,7 @@ import * as s from "./schema";
       { tag: "19th century", bookId: insertedBooks[0].id },
       { tag: "Lovesickness", bookId: insertedBooks[1].id },
       { tag: "1980s", bookId: insertedBooks[1].id },
-    ]).run(db.pool);
+    ]).run(pool);
 
     console.log(insertedTags);
   })();
@@ -56,7 +60,7 @@ import * as s from "./schema";
       authorId = 1,
       query = db.sql<s.books.SQL>`
         SELECT * FROM ${"books"} WHERE ${{ authorId }}`,
-      existingBooks: s.books.Selectable[] = await query.run(db.pool);
+      existingBooks: s.books.Selectable[] = await query.run(pool);
   
     console.log(existingBooks);
   })();
@@ -74,7 +78,7 @@ import * as s from "./schema";
           createdAt: db.sql<s.books.SQL>`
             ${db.self} > now() - ${db.param(days)} * INTERVAL '1 DAY'`,
         }}`,
-      existingBooks: s.books.Selectable[] = await query.run(db.pool);
+      existingBooks: s.books.Selectable[] = await query.run(pool);
   
     console.log(existingBooks);
   })();
@@ -90,7 +94,7 @@ import * as s from "./schema";
       query = db.sql<s.books.SQL>`
         INSERT INTO ${"books"} (${db.cols(newBook)})
         VALUES (${db.vals(newBook)})`,
-      insertedBooks: s.books.Selectable[] = await query.run(db.pool);
+      insertedBooks: s.books.Selectable[] = await query.run(pool);
     
     console.log(insertedBooks);
   })();
@@ -106,7 +110,7 @@ import * as s from "./schema";
         SELECT ${"books"}.*, to_jsonb(${"authors"}.*) as ${"author"}
         FROM ${"books"} JOIN ${"authors"} 
           ON ${"books"}.${"authorId"} = ${"authors"}.${"id"}`,
-      bookAuthors: bookAuthorSelectable[] = await query.run(db.pool);
+      bookAuthors: bookAuthorSelectable[] = await query.run(pool);
     
     console.log(bookAuthors);
   })();
@@ -127,7 +131,7 @@ import * as s from "./schema";
         FROM ${"authors"} LEFT JOIN ${"books"} 
           ON ${"authors"}.${"id"} = ${"books"}.${"authorId"}
         GROUP BY ${"authors"}.${"id"}`,
-      authorBooks: authorBooksSelectable[] = await query.run(db.pool);
+      authorBooks: authorBooksSelectable[] = await query.run(pool);
 
     console.dir(authorBooks, { depth: null });
   })();
@@ -149,7 +153,7 @@ import * as s from "./schema";
           FROM ${"books"}
           WHERE ${"books"}.${"authorId"} = ${"authors"}.${"id"}
         ) bq`,
-      authorBooks: authorBooksSelectable[] = await query.run(db.pool);
+      authorBooks: authorBooksSelectable[] = await query.run(pool);
 
     console.dir(authorBooks, { depth: null });
   })();
@@ -174,7 +178,7 @@ import * as s from "./schema";
           ) tq
           WHERE ${"books"}.${"authorId"} = ${"authors"}.${"id"}
         ) bq`,
-      authorBookTags: authorBookTagsSelectable[] = await query.run(db.pool);
+      authorBookTags: authorBookTagsSelectable[] = await query.run(pool);
 
     console.dir(authorBookTags, { depth: null });
   })();
@@ -187,7 +191,7 @@ import * as s from "./schema";
 
     const
       query = db.sql<s.books.SQL>`SELECT ${db.cols(bookCols)} FROM ${"books"}`,
-      bookData: BookDatum[] = await query.run(db.pool);
+      bookData: BookDatum[] = await query.run(pool);
     
     console.log(bookData);
   })();
@@ -197,32 +201,32 @@ import * as s from "./schema";
     
     const
       authorId = 123,
-      existingBooks = await db.select("books", { authorId }).run(db.pool);
+      existingBooks = await db.select("books", { authorId }).run(pool);
     
     console.log(existingBooks);
 
-    const allBookTitles = await db.select("books", db.all, { columns: ['title'] }).run(db.pool);
+    const allBookTitles = await db.select("books", db.all, { columns: ['title'] }).run(pool);
 
     console.log(allBookTitles);
 
     const lastButOneBook = await db.selectOne("books", { authorId }, {
       order: [{ by: "createdAt", direction: "DESC" }], offset: 1
-    }).run(db.pool);
+    }).run(pool);
 
     console.log(lastButOneBook);
 
-    const numberOfBooks = await db.count("books", db.all).run(db.pool);
+    const numberOfBooks = await db.count("books", db.all).run(pool);
 
     console.log(numberOfBooks);
 
-    const noBooksAtAll = await db.select("books", { authorId: -1 }).run(db.pool);
+    const noBooksAtAll = await db.select("books", { authorId: -1 }).run(pool);
 
     console.log(noBooksAtAll);
 
-    const noBookAtAll = await db.selectOne("books", { authorId: -1 }).run(db.pool);
+    const noBookAtAll = await db.selectOne("books", { authorId: -1 }).run(pool);
     console.log(noBookAtAll);
 
-    const zeroBookCount = await db.count("books", { authorId: -1 }).run(db.pool);
+    const zeroBookCount = await db.count("books", { authorId: -1 }).run(pool);
     console.log(zeroBookCount);
 
     const savedBooks = await db.insert("books",
@@ -233,7 +237,7 @@ import * as s from "./schema";
         authorId: 456,
         title: "Cheerio, and Thanks for All the Fish",
       }]
-    ).run(db.pool);
+    ).run(pool);
     
     console.log(savedBooks);
 
@@ -244,11 +248,11 @@ import * as s from "./schema";
       [updatedBook] = await db.update("books",
         { title: properTitle },
         { id: fishBookId }
-      ).run(db.pool);
+      ).run(pool);
     
     console.log(updatedBook);
 
-    const deleted = await db.deletes('books', { id: fishBookId }).run(db.pool);
+    const deleted = await db.deletes('books', { id: fishBookId }).run(pool);
     console.log(deleted);
   })();
 
@@ -257,11 +261,11 @@ import * as s from "./schema";
 
     const
       email = "me@privacy.net",
-      insertedEmail = await db.insert("emailAuthentication", { email }).run(db.pool),
+      insertedEmail = await db.insert("emailAuthentication", { email }).run(pool),
       updatedEmail = await db.update("emailAuthentication", {
         consecutiveFailedLogins: db.sql`${db.self} + 1`,
         lastFailedLogin: db.sql`now()`,
-      }, { email }).run(db.pool);
+      }, { email }).run(pool);
     
     console.log(insertedEmail, updatedEmail);
   })();
@@ -274,7 +278,7 @@ import * as s from "./schema";
       originalTransactionId: '123456',
       accountId: 123,
       latestReceiptData: "5Ia+DmVgPHh8wigA",
-    }).run(db.pool);
+    }).run(pool);
 
     const
       newTransactions: s.appleTransactions.Insertable[] = [{
@@ -289,7 +293,7 @@ import * as s from "./schema";
         latestReceiptData: "bmd1aXNoZWQsIG5v",
       }],
       result = await db.upsert("appleTransactions", newTransactions,
-        ["environment", "originalTransactionId"]).run(db.pool);
+        ["environment", "originalTransactionId"]).run(pool);
 
     console.log(result);
   })();
@@ -300,7 +304,7 @@ import * as s from "./schema";
     const q = await db.select('authors', db.all, {
       lateral: { books: db.select('books', { authorId: db.parent('id') }) }
     });
-    const r = await q.run(db.pool);
+    const r = await q.run(pool);
     console.dir(r, { depth: null });
   })();
 
@@ -315,7 +319,7 @@ import * as s from "./schema";
           }
         })
       }
-    }).run(db.pool);
+    }).run(pool);
 
     console.dir(authorsBooksTags, { depth: null });
     // authorsBooksTags.map(a => a.books.map(b => b.tags.map(t => t.tag)));
@@ -325,12 +329,12 @@ import * as s from "./schema";
     console.log('\n=== Shortcut self-joins requiring aliases ===\n');
 
     const
-      anna = await db.insert('employees', { name: 'Anna' }).run(db.pool),
+      anna = await db.insert('employees', { name: 'Anna' }).run(pool),
       [beth, charlie] = await db.insert('employees', [
         { name: 'Beth', managerId: anna.id },
         { name: 'Charlie', managerId: anna.id },
-      ]).run(db.pool),
-      dougal = await db.insert('employees', { name: 'Dougal', managerId: beth.id }).run(db.pool);
+      ]).run(pool),
+      dougal = await db.insert('employees', { name: 'Dougal', managerId: beth.id }).run(pool);
 
     const people = await db.select('employees', db.all, {
       columns: ['name'],
@@ -341,7 +345,7 @@ import * as s from "./schema";
         directReports: db.count('employees', { managerId: db.parent('id') },
           { alias: 'reports' }),
       },
-    }).run(db.pool);
+    }).run(pool);
 
     console.dir(people, { depth: null });
   })();
@@ -358,7 +362,7 @@ import * as s from "./schema";
       { name: 'Edinburgh', geom: OSGB36Point(323427, 676132) },
       { name: 'Newcastle', geom: OSGB36Point(421427, 563132) },
       { name: 'Exeter', geom: OSGB36Point(288427, 92132) },
-    ]).run(db.pool);
+    ]).run(pool);
 
     const localStore = await db.selectOne('stores', { id: brighton.id }, {
       columns: ['name'],
@@ -373,7 +377,7 @@ import * as s from "./schema";
           },
         })
       }
-    }).run(db.pool);
+    }).run(pool);
 
     console.log(localStore);
   })();
@@ -384,17 +388,17 @@ import * as s from "./schema";
 
     const authorWithNoBooks = await db.selectOne('authors', db.all, {
       lateral: { bearBooks: db.select('books', { authorId: db.parent('id'), title: db.sql`${db.self} LIKE '%bear%'` }) }
-    }).run(db.pool);
+    }).run(pool);
 
     console.log(authorWithNoBooks);
 
     const authorWithZeroCountBooks = await db.selectOne('authors', db.all, {
       lateral: { bearBooks: db.count('books', { authorId: db.parent('id'), title: db.sql`${db.self} LIKE '%bear%'` }) }
-    }).run(db.pool);
+    }).run(pool);
 
     console.log(authorWithZeroCountBooks);
 
-    const bookWithNoAuthor = await db.selectOne('books', db.all, { lateral: { author: db.selectOne('authors', { id: -1 }) } }).run(db.pool);
+    const bookWithNoAuthor = await db.selectOne('books', db.all, { lateral: { author: db.selectOne('authors', { id: -1 }) } }).run(pool);
 
     console.log(bookWithNoAuthor);
   })();
@@ -404,33 +408,33 @@ import * as s from "./schema";
 
     const
       oneBooks: s.books.Selectable[] =
-        await db.sql<s.books.SQL>`SELECT * FROM ${"books"} LIMIT 1`.run(db.pool),
+        await db.sql<s.books.SQL>`SELECT * FROM ${"books"} LIMIT 1`.run(pool),
       oneBook = oneBooks[0],
       someActualDate = oneBook.createdAt;
 
     console.log(someActualDate.constructor, someActualDate);
 
     const
-      book = await db.selectOne('books', db.all, { columns: ['createdAt'] }).run(db.pool),
+      book = await db.selectOne('books', db.all, { columns: ['createdAt'] }).run(pool),
       someSoCalledDate = book!.createdAt,
       someConvertedDate = new Date(someSoCalledDate);
 
     console.log(someSoCalledDate.constructor, someSoCalledDate, someConvertedDate);
 
     // this fails to find anything, because JS date conversion truncates μs to ms
-    const bookDatedByDate = await db.selectOne('books', { createdAt: someActualDate }).run(db.pool);
+    const bookDatedByDate = await db.selectOne('books', { createdAt: someActualDate }).run(pool);
     console.log(bookDatedByDate);
 
     // therefore this also fails
-    const bookDatedByConvertedDate = await db.selectOne('books', { createdAt: someConvertedDate }).run(db.pool);
+    const bookDatedByConvertedDate = await db.selectOne('books', { createdAt: someConvertedDate }).run(pool);
     console.log(bookDatedByConvertedDate);
 
     // but this works
-    const bookDatedByTruncDate = await db.selectOne('books', { createdAt: db.sql<db.SQL>`date_trunc('milliseconds', ${db.self}) = ${db.param(someActualDate)}` }).run(db.pool);
+    const bookDatedByTruncDate = await db.selectOne('books', { createdAt: db.sql<db.SQL>`date_trunc('milliseconds', ${db.self}) = ${db.param(someActualDate)}` }).run(pool);
     console.log(bookDatedByTruncDate);
 
     // and this also works, more sanely
-    const bookDatedByString = await db.selectOne('books', { createdAt: someSoCalledDate }).run(db.pool);
+    const bookDatedByString = await db.selectOne('books', { createdAt: someSoCalledDate }).run(pool);
     console.log(bookDatedByString);
   })();
 
@@ -438,7 +442,7 @@ import * as s from "./schema";
     console.log('\n=== Transaction ===\n');
     const
       email = "me@privacy.net",
-      result = await db.transaction(db.Isolation.Serializable, async txnClient => {
+      result = await db.transaction(pool, db.Isolation.Serializable, async txnClient => {
 
         const emailAuth = await db.selectOne("emailAuthentication", { email }).run(txnClient);
         
@@ -457,5 +461,5 @@ import * as s from "./schema";
     console.log(result);
   })();
 
-  await db.pool.end();
+  await pool.end();
 })();

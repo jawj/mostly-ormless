@@ -1,6 +1,5 @@
 import * as pg from 'pg';
 import { isDatabaseError } from './pgErrors';
-import config from './config';
 
 import {
   InsertSignatures,
@@ -17,14 +16,25 @@ import {
   UpsertSignatures,
 } from './schema';
 
-export interface DBConfig {
-  dbURL: string,
-  dbTransactionAttempts: number,
-  dbTransactionRetryDelayRange: [number, number],
+
+// === configuration ===
+
+export interface Config {
+  dbMaxTransactionAttempts: number,
+  dbTransactionRetryDelayMsRange: [number, number],
   verbose: boolean,
 }
 
-export const pool = new pg.Pool({ connectionString: config.dbURL });
+export type NewConfig = Partial<Config>;
+
+const config: Config = {  // default config
+  dbMaxTransactionAttempts: 5,
+  dbTransactionRetryDelayMsRange: [25, 250],
+  verbose: false,
+};
+
+export const getConfig = () => Object.assign({}, config);  // don't let anyone mess with the original
+export const setConfig = (newConfig: NewConfig) => Object.assign(config, newConfig);
 
 
 // === symbols, types, wrapper classes and shortcuts ===
@@ -38,7 +48,8 @@ export type SelfType = typeof self;
 export const all = Symbol('all');
 export type AllType = typeof all;
 
-export type JSONValue = null | boolean | number | string | { [k: string]: JSONValue; } | JSONValue[];
+export type JSONValue = null | boolean | number | string | JSONObject | JSONArray;
+export type JSONObject = { [k: string]: JSONValue };
 export type JSONArray = JSONValue[];
 
 export type DateString = string;
@@ -71,7 +82,7 @@ export type PromisedSQLFragmentReturnTypeMap<L extends SQLFragmentsMap> = { [K i
 
 // === simple query helpers ===
 
-export type Queryable = pg.Pool | PoolClient<any>;
+export type Queryable = pg.Pool | TxnClient<any>;
 
 export const insert: InsertSignatures = function
   (table: Table, values: Insertable | Insertable[]): SQLFragment<any> {
@@ -288,21 +299,21 @@ export namespace TxnSatisfying {
   export type SerializableRODeferrable = SerializableRO | Isolation.SerializableRODeferrable;
 }
 
-export interface PoolClient<T extends Isolation | undefined> extends pg.PoolClient {
+export interface TxnClient<T extends Isolation | undefined> extends pg.PoolClient {
   transactionMode: T;
 }
 
 let txnSeq = 0;
 
 export async function transaction<T, M extends Isolation>(
-  isolationMode: M, callback: (client: PoolClient<M>) => Promise<T>
+  pool: pg.Pool, isolationMode: M, callback: (client: TxnClient<M>) => Promise<T>
 ): Promise<T> {
 
   const
     txnId = txnSeq++,
-    txnClient = await pool.connect() as PoolClient<typeof isolationMode>,
-    maxAttempts = config.dbTransactionAttempts,
-    [delayMin, delayMax] = config.dbTransactionRetryDelayRange;
+    txnClient = await pool.connect() as TxnClient<typeof isolationMode>,
+    maxAttempts = config.dbMaxTransactionAttempts,
+    [delayMin, delayMax] = config.dbTransactionRetryDelayMsRange;
 
   txnClient.transactionMode = isolationMode;
 
