@@ -23,12 +23,12 @@ import {
     AllType,
     SQLFragmentsMap,
     PromisedSQLFragmentReturnTypeMap,
-} from "./core";
+} from "./src/core";
 
 import {
     UpsertAction,
     SelectResultMode,
-} from "./shortcuts";
+} from "./src/shortcuts";
 
 export type appleEnvironment = 'PROD' | 'Sandbox';
 export namespace every {

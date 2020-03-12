@@ -100,7 +100,7 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
 
     } else if (typeof expression === 'string') {
       // if it's a string, it should be a x.Table or x.Columns type, so just needs quoting
-      result.text += `"${expression}"`;
+      result.text += expression.charAt(0) === '"' ? expression : `"${expression}"`;
 
     } else if (expression instanceof DangerousRawString) {
       // Little Bobby Tables passes straight through ...

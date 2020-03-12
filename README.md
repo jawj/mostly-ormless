@@ -913,13 +913,13 @@ cd mostly-ormless
 npm install
 
 createdb mostly_ormless
-psql -d mostly_ormless < src/schema.sql
+psql -d mostly_ormless < demo/schema.sql
 ```
 
 Then:
 
 ```sh
-npx ts-node src/demo.ts  # runs all the examples in this README
+npx ts-node demo/demo.ts  # runs all the examples in this README
 ```
 
 Once you've got `demo.ts` running successfully, you can play around with your own queries in there.
@@ -939,7 +939,7 @@ Then, whenever you change the schema in Postgres, regenerate `src/schema.ts` by 
 ```sh
 npx ts-node schemats/bin/schemats.ts generate \
   -c postgres://localhost/mostly_ormless \
-  -o src/schema.ts \
+  -o demo/schema.ts \
   -x geography_columns geometry_columns raster_columns raster_overviews spatial_ref_sys
 ```
 
