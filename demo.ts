@@ -1,6 +1,6 @@
 import * as pg from 'pg';
 
-import * as db from "../src";
+import * as db from "./src";
 import * as s from "./schema";
 
 db.setConfig({ verbose: true });

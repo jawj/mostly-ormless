@@ -1,33 +1,45 @@
 
 import {
-  InsertSignatures,
-  UpdateSignatures,
-  DeleteSignatures,
-  SelectSignatures,
-  SelectOneSignatures,
-  CountSignatures,
+  SelectableForTable,
+  WhereableForTable,
+  InsertableForTable,
+  UpdatableForTable,
+  ColumnForTable,
+  SQLForTable,
   Insertable,
   Updatable,
   Whereable,
   Table,
   Column,
-  UpsertSignatures,
 } from '../schema';
 
 import {
+  AllType,
+  all,
+  DateString,
   SQL,
-  SQLFragmentsMap,
   SQLFragment,
   sql,
   cols,
   vals,
   raw,
-  all,
-  AllType,
 } from './core';
 
 import { completeKeysWithDefault, mapWithSeparator } from './helpers';
 
+type JSONSelectableForTable<T extends Table> = { [K in keyof SelectableForTable<T>]:
+  Date extends SelectableForTable<T>[K] ? Exclude<SelectableForTable<T>[K], Date> | DateString :
+  Date[] extends SelectableForTable<T>[K] ? Exclude<SelectableForTable<T>[K], Date[]> | DateString[] :
+  SelectableForTable<T>[K]
+};
+
+
+/* === insert === */
+
+interface InsertSignatures {
+  <T extends Table>(table: T, values: InsertableForTable<T>): SQLFragment<JSONSelectableForTable<T>>;
+  <T extends Table>(table: T, values: InsertableForTable<T>[]): SQLFragment<JSONSelectableForTable<T>[]>;
+}
 
 export const insert: InsertSignatures = function
   (table: Table, values: Insertable | Insertable[]): SQLFragment<any> {
@@ -48,7 +60,15 @@ export const insert: InsertSignatures = function
 }
 
 
-export interface UpsertAction { $action: 'INSERT' | 'UPDATE' };
+/* === upsert === */
+
+interface UpsertAction { $action: 'INSERT' | 'UPDATE' };
+type UpsertReturnableForTable<T extends Table> = JSONSelectableForTable<T> & UpsertAction;
+
+interface UpsertSignatures {
+  <T extends Table>(table: T, values: InsertableForTable<T>, uniqueCols: ColumnForTable<T> | ColumnForTable<T>[], noNullUpdateCols?: ColumnForTable<T> | ColumnForTable<T>[]): SQLFragment<UpsertReturnableForTable<T>>;
+  <T extends Table>(table: T, values: InsertableForTable<T>[], uniqueCols: ColumnForTable<T> | ColumnForTable<T>[], noNullUpdateCols?: ColumnForTable<T> | ColumnForTable<T>[]): SQLFragment<UpsertReturnableForTable<T>[]>;
+}
 
 export const upsert: UpsertSignatures = function
   (table: Table, values: Insertable | Insertable[], uniqueCols: Column | Column[], noNullUpdateCols: Column | Column[] = []): SQLFragment<any> {
@@ -82,6 +102,12 @@ export const upsert: UpsertSignatures = function
 }
 
 
+/* === update === */
+
+interface UpdateSignatures {
+  <T extends Table>(table: T, values: UpdatableForTable<T>, where: WhereableForTable<T> | SQLFragment): SQLFragment<JSONSelectableForTable<T>[]>;
+}
+
 export const update: UpdateSignatures = function (
   table: Table,
   values: Updatable,
@@ -91,20 +117,27 @@ export const update: UpdateSignatures = function (
   // more info: https://www.postgresql-archive.org/Possible-regression-in-UPDATE-SET-lt-column-list-gt-lt-row-expression-gt-with-just-one-single-column0-td5989074.html
 
   const query = sql<SQL>`UPDATE ${table} SET (${cols(values)}) = ROW(${vals(values)}) WHERE ${where} RETURNING to_jsonb(${table}.*) AS result`;
-
   query.runResultTransform = (qr) => qr.rows.map(r => r.result);
   return query;
+}
+
+
+/* === delete === */
+
+export interface DeleteSignatures {
+  <T extends Table>(table: T, where: WhereableForTable<T> | SQLFragment): SQLFragment<JSONSelectableForTable<T>[]>;
 }
 
 export const deletes: DeleteSignatures = function  // sadly, delete is a reserved word
   (table: Table, where: Whereable | SQLFragment): SQLFragment {
 
   const query = sql<SQL>`DELETE FROM ${table} WHERE ${where} RETURNING to_jsonb(${table}.*) AS result`;
-
   query.runResultTransform = (qr) => qr.rows.map(r => r.result);
   return query;
 }
 
+
+/* === truncate === */
 
 type TruncateIdentityOpts = 'CONTINUE IDENTITY' | 'RESTART IDENTITY';
 type TruncateForeignKeyOpts = 'RESTRICT' | 'CASCADE';
@@ -127,32 +160,59 @@ export const truncate: TruncateSignatures = function
 }
 
 
-interface OrderSpec {
-  by: SQL,
+/* === select === */
+
+interface OrderSpecForTable<T extends Table> {
+  by: SQLForTable<T>,
   direction: 'ASC' | 'DESC',
   nulls?: 'FIRST' | 'LAST',
 }
 
-export enum SelectResultMode {
-  Many,
-  One,
-  Count,
+export interface SelectOptionsForTable<T extends Table, C extends ColumnForTable<T>[], L extends SQLFragmentsMap, E extends SQLFragmentsMap> {
+  order?: OrderSpecForTable<T>[];
+  limit?: number;
+  offset?: number;
+  columns?: C;
+  extras?: E,
+  lateral?: L;
+  alias?: string;
 }
 
-interface SelectOptions {
-  order?: OrderSpec[];
-  limit?: number,
-  offset?: number,
-  columns?: Column[],
-  extras?: SQLFragmentsMap;
-  lateral?: SQLFragmentsMap;
-  alias?: string;
+export interface SQLFragmentsMap { [k: string]: SQLFragment<any> };
+export type PromisedType<P> = P extends Promise<infer U> ? U : never;
+export type PromisedSQLFragmentReturnType<R extends SQLFragment<any>> = PromisedType<ReturnType<R['run']>>;
+export type PromisedSQLFragmentReturnTypeMap<L extends SQLFragmentsMap> = { [K in keyof L]: PromisedSQLFragmentReturnType<L[K]> };
+
+export type JSONOnlyColsForTable<T extends Table, C extends any[] /* TS can't manage being more specific here */> = Pick<JSONSelectableForTable<T>, C[number]>;
+
+type BaseSelectReturnTypeForTable<T extends Table, C extends ColumnForTable<T>[]> = C extends undefined ? JSONSelectableForTable<T> : JSONOnlyColsForTable<T, C>;
+
+type EnhancedSelectReturnTypeForTable<T extends Table, C extends ColumnForTable<T>[], L extends SQLFragmentsMap, E extends SQLFragmentsMap> =
+  L extends undefined ?
+  (E extends undefined ? BaseSelectReturnTypeForTable<T, C> : BaseSelectReturnTypeForTable<T, C> & PromisedSQLFragmentReturnTypeMap<E>) :
+  (E extends undefined ?
+    BaseSelectReturnTypeForTable<T, C> & PromisedSQLFragmentReturnTypeMap<L> :
+    BaseSelectReturnTypeForTable<T, C> & PromisedSQLFragmentReturnTypeMap<L> & PromisedSQLFragmentReturnTypeMap<E>);
+
+export type FullSelectReturnTypeForTable<T extends Table, C extends ColumnForTable<T>[], L extends SQLFragmentsMap, E extends SQLFragmentsMap, M extends SelectResultMode> =
+  M extends SelectResultMode.Many ? EnhancedSelectReturnTypeForTable<T, C, L, E>[] :
+  M extends SelectResultMode.One ? EnhancedSelectReturnTypeForTable<T, C, L, E> | undefined : number;
+
+export enum SelectResultMode { Many, One, Count };
+
+export interface SelectSignatures {
+  <T extends Table, C extends ColumnForTable<T>[], L extends SQLFragmentsMap, E extends SQLFragmentsMap, M extends SelectResultMode = SelectResultMode.Many> (
+    table: T,
+    where: WhereableForTable<T> | SQLFragment | AllType,
+    options?: SelectOptionsForTable<T, C, L, E>,
+    mode?: M,
+  ): SQLFragment<FullSelectReturnTypeForTable<T, C, L, E, M>>;
 }
 
 export const select: SelectSignatures = function (
   rawTable: Table,
   where: Whereable | SQLFragment | AllType = all,
-  rawOptions: SelectOptions = {},
+  rawOptions: SelectOptionsForTable<Table, ColumnForTable<Table>[], SQLFragmentsMap, SQLFragmentsMap> = {},
   mode: SelectResultMode = SelectResultMode.Many,
 ) {
 
@@ -185,10 +245,10 @@ export const select: SelectSignatures = function (
     });
 
   const
-    rowsQuery = sql<SQL>`SELECT ${allColsSQL} AS result FROM ${rawTable}${tableAliasSQL}${lateralSQL}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`,
+    rowsQuery = sql<SQL, any>`SELECT ${allColsSQL} AS result FROM ${rawTable}${tableAliasSQL}${lateralSQL}${whereSQL}${orderSQL}${limitSQL}${offsetSQL}`,
     query = mode !== SelectResultMode.Many ? rowsQuery :
       // we need the aggregate to sit in a sub-SELECT in order to keep ORDER and LIMIT working as usual
-      sql<SQL>`SELECT coalesce(jsonb_agg(result), '[]') AS result FROM (${rowsQuery}) AS ${raw(`"sq_${table}"`)}`;
+      sql<SQL, any>`SELECT coalesce(jsonb_agg(result), '[]') AS result FROM (${rowsQuery}) AS ${raw(`"sq_${table}"`)}`;
 
   query.runResultTransform = mode === SelectResultMode.Count ?
     // note: pg deliberately returns strings for int8 in case 64-bit numbers overflow
@@ -200,25 +260,41 @@ export const select: SelectSignatures = function (
 }
 
 
+/* === selectOne === */
+
+export interface SelectOneSignatures {
+  <T extends Table, C extends ColumnForTable<T>[], L extends SQLFragmentsMap, E extends SQLFragmentsMap>(
+    table: T,
+    where: WhereableForTable<T> | SQLFragment | AllType,
+    options?: SelectOptionsForTable<T, C, L, E>,
+  ): SQLFragment<FullSelectReturnTypeForTable<T, C, L, E, SelectResultMode.One>>;
+}
+
 export const selectOne: SelectOneSignatures = function (
-  table: Table,
-  where: Whereable | SQLFragment | AllType = all,
-  options: SelectOptions = {},
+  table: any,
+  where: any,
+  options: any = {},
 ) {
   // you might argue that 'selectOne' offers little that you can't get with destructuring assignment 
   // and plain 'select' -- e.g. let [x] = async select(...).run(pool); -- but a thing that is definitely worth 
   // having is '| undefined' in the return signature, because the result of indexing never includes undefined
   // (see e.g. https://github.com/Microsoft/TypeScript/issues/13778)
 
-  return select(<any>table, <any>where, <any>options, SelectResultMode.One);
+  return select(table, where, options, SelectResultMode.One);
+}
+
+export interface CountSignatures {
+  <T extends Table>(table: T, where: WhereableForTable<T> | SQLFragment | AllType, options?: { columns?: ColumnForTable<T>[], alias?: string }): SQLFragment<number>;
 }
 
 
+/* === count === */
+
 export const count: CountSignatures = function (
-  table: Table,
-  where: Whereable | SQLFragment | AllType = all,
-  options?: { columns?: Column[], alias?: string },
+  table: any,
+  where: any,
+  options?: any,
 ) {
 
-  return select(<any>table, <any>where, <any>options, SelectResultMode.Count);
+  return select(table, where, options, SelectResultMode.Count);
 }

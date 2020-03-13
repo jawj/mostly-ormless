@@ -97,44 +97,15 @@ export namespace ${tableName} {
   export interface Selectable {
     ${selectables.join('\n    ')}
   };
-  export type JSONSelectable = { [K in keyof Selectable]:
-    Date extends Selectable[K] ? Exclude<Selectable[K], Date> | DateString : 
-      Date[] extends Selectable[K] ? Exclude<Selectable[K], Date[]> | DateString[] : Selectable[K] };
   export interface Insertable {
     ${insertables.join('\n    ')}
   };
   export interface Updatable extends Partial<Insertable> { };
   export type Whereable = { [K in keyof Insertable]?: Exclude<Insertable[K] | ParentColumn, null | DefaultType> };
-  export interface UpsertReturnable extends JSONSelectable, UpsertAction { };
   export type Column = keyof Selectable;
   export type OnlyCols<T extends readonly Column[]> = Pick<Selectable, T[number]>;
-  export type JSONOnlyCols<T extends readonly Column[]> = Pick<JSONSelectable, T[number]>;
   export type SQLExpression = GenericSQLExpression | Table | Whereable | Column | ColumnNames<Updatable | (keyof Updatable)[]> | ColumnValues<Updatable>;
   export type SQL = SQLExpression | SQLExpression[];
-  export interface OrderSpec {
-    by: SQL;
-    direction: 'ASC' | 'DESC';
-    nulls?: 'FIRST' | 'LAST';
-  }
-  export interface SelectOptions<C extends Column[], L extends SQLFragmentsMap, E extends SQLFragmentsMap> {
-    order?: OrderSpec[];
-    limit?: number;
-    offset?: number;
-    columns?: C;
-    extras?: E,
-    lateral?: L;
-    alias?: string;
-  }
-  type BaseSelectReturnType<C extends Column[]> = C extends undefined ? JSONSelectable : JSONOnlyCols<C>;
-  type EnhancedSelectReturnType<C extends Column[], L extends SQLFragmentsMap, E extends SQLFragmentsMap> =
-    L extends undefined ?
-    (E extends undefined ? BaseSelectReturnType<C> : BaseSelectReturnType<C> & PromisedSQLFragmentReturnTypeMap<E>) :
-    (E extends undefined ?
-      BaseSelectReturnType<C> & PromisedSQLFragmentReturnTypeMap<L> :
-      BaseSelectReturnType<C> & PromisedSQLFragmentReturnTypeMap<L> & PromisedSQLFragmentReturnTypeMap<E>);
-  export type FullSelectReturnType<C extends Column[], L extends SQLFragmentsMap, E extends SQLFragmentsMap, M extends SelectResultMode> =
-    M extends SelectResultMode.Many ? EnhancedSelectReturnType<C, L, E>[] :
-    M extends SelectResultMode.One ? EnhancedSelectReturnType<C, L, E> | undefined : number;
 }`;
 }
 
@@ -174,54 +145,21 @@ export namespace every {
   return types;
 }
 
-const signaturesForTables = (tableNames: string[]) => `
+const crossTableTypesForTables = (tableNames: string[]) => `
+export type Table = ${tableNames.map(name => `${name}.Table`).join(' | ')};
 export type Selectable = ${tableNames.map(name => `${name}.Selectable`).join(' | ')};
-export type JSONSelectable = ${tableNames.map(name => `${name}.JSONSelectable`).join(' | ')};
 export type Whereable = ${tableNames.map(name => `${name}.Whereable`).join(' | ')};
 export type Insertable = ${tableNames.map(name => `${name}.Insertable`).join(' | ')};
 export type Updatable = ${tableNames.map(name => `${name}.Updatable`).join(' | ')};
-export type Table = ${tableNames.map(name => `${name}.Table`).join(' | ')};
 export type Column = ${tableNames.map(name => `${name}.Column`).join(' | ')};
 export type AllTables = [${tableNames.map(name => `${name}.Table`).join(', ')}];
 
-export interface InsertSignatures {${tableNames.map(name => `
-  (table: ${name}.Table, values: ${name}.Insertable): SQLFragment<${name}.JSONSelectable>;
-  (table: ${name}.Table, values: ${name}.Insertable[]): SQLFragment<${name}.JSONSelectable[]>;`).join('')}
-}
-
-export interface UpsertSignatures {${tableNames.map(name => `
-  (table: ${name}.Table, values: ${name}.Insertable, uniqueCols: ${name}.Column | ${name}.Column[], noNullUpdateCols?: ${name}.Column | ${name}.Column[]): SQLFragment<${name}.UpsertReturnable>;
-  (table: ${name}.Table, values: ${name}.Insertable[], uniqueCols: ${name}.Column | ${name}.Column[], noNullUpdateCols?: ${name}.Column | ${name}.Column[]): SQLFragment<${name}.UpsertReturnable[]>;`).join('')}
-}
-
-export interface UpdateSignatures {${tableNames.map(name => `
-  (table: ${name}.Table, values: ${name}.Updatable, where: ${name}.Whereable | SQLFragment): SQLFragment<${name}.JSONSelectable[]>;`).join('')}
-}
-
-export interface DeleteSignatures {${tableNames.map(name => `
-  (table: ${name}.Table, where: ${name}.Whereable | SQLFragment): SQLFragment<${name}.JSONSelectable[]>;`).join('')}
-}
-
-export interface SelectSignatures {${tableNames.map(name => `
-  <C extends ${name}.Column[], L extends SQLFragmentsMap, E extends SQLFragmentsMap, M extends SelectResultMode = SelectResultMode.Many>(
-    table: ${name}.Table,
-    where: ${name}.Whereable | SQLFragment | AllType,
-    options?: ${name}.SelectOptions<C, L, E>,
-    mode?: M,
-  ): SQLFragment<${name}.FullSelectReturnType<C, L, E, M>>;`).join('\n')}
-}
-
-export interface SelectOneSignatures {${tableNames.map(name => `
-  <C extends ${name}.Column[], L extends SQLFragmentsMap, E extends SQLFragmentsMap>(
-    table: ${name}.Table,
-    where: ${name}.Whereable | SQLFragment | AllType,
-    options?: ${name}.SelectOptions<C, L, E>,
-  ): SQLFragment<${name}.FullSelectReturnType<C, L, E, SelectResultMode.One>>;`).join('\n')}
-}
-
-export interface CountSignatures {${tableNames.map(name => `
-  (table: ${name}.Table, where: ${name}.Whereable | SQLFragment | AllType, options?: { columns?: ${name}.Column[], alias?: string }): SQLFragment<number>;`).join('')}
-}`;
+${['Selectable', 'Whereable', 'Insertable', 'Updatable', 'Column', 'SQL'].map(thingable => `
+export type ${thingable}ForTable<T extends Table> = ${tableNames.map(name => `
+  T extends ${name}.Table ? ${name}.${thingable} :`).join('')}
+  never;
+`).join('')}
+`;
 
 const header = () => `
 /* 
@@ -239,12 +177,7 @@ import {
   ColumnValues,
   ParentColumn,
   DefaultType,
-  AllType,
-  UpsertAction,
-  SelectResultMode,
-  SQLFragmentsMap,
-  PromisedSQLFragmentReturnTypeMap,
-} from "./core";
+} from "./src/core";
 
 `;
 
@@ -269,7 +202,7 @@ const tsFileForSchemaRules = async (schemas: SchemaRules = { public: { include: 
         (await Promise.all(
           tables.map(async table => definitionForTableInSchema(table, schema))
         )).join('\n') +
-        signaturesForTables(tables);
+        crossTableTypesForTables(tables);
     }))
   ).join('\n\n');
 

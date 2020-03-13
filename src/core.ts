@@ -47,12 +47,6 @@ export type GenericSQLExpression = SQLFragment<any> | Parameter | DefaultType | 
 export type SQLExpression = Table | ColumnNames<Updatable | (keyof Updatable)[]> | ColumnValues<Updatable> | Whereable | Column | GenericSQLExpression;
 export type SQL = SQLExpression | SQLExpression[];
 
-
-export interface SQLFragmentsMap { [k: string]: SQLFragment<any> };
-export type PromisedType<P> = P extends Promise<infer U> ? U : never;
-export type PromisedSQLFragmentReturnType<R extends SQLFragment<any>> = PromisedType<ReturnType<R['run']>>;
-export type PromisedSQLFragmentReturnTypeMap<L extends SQLFragmentsMap> = { [K in keyof L]: PromisedSQLFragmentReturnType<L[K]> };
-
 export type Queryable = pg.Pool | TxnClient<any>;
 
 
