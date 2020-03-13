@@ -163,7 +163,7 @@ export type AllTables = [${tableNames.map(name => `${name}.Table`).join(', ')}];
 ${['Selectable', 'Whereable', 'Insertable', 'Updatable', 'Column', 'SQL'].map(thingable => `
 export type ${thingable}ForTable<T extends Table> = ${tableNames.map(name => `
   T extends ${name}.Table ? ${name}.${thingable} :`).join('')}
-  never;
+  ${thingable};
 `).join('')}
 `;
 
@@ -178,6 +178,7 @@ import {
   JSONArray,
   DateString,
   SQLFragment,
+  SQL,
   GenericSQLExpression,
   ColumnNames,
   ColumnValues,
