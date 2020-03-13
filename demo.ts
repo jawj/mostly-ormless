@@ -296,7 +296,7 @@ const pool = new pg.Pool({ connectionString: 'postgresql://localhost/mostly_orml
       result = await db.upsert("appleTransactions", newTransactions,
         ["environment", "originalTransactionId"]).run(pool);
 
-    console.log(result);
+    console.log(result[0].environment);
   })();
 
   await (async () => {

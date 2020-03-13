@@ -4,7 +4,40 @@ import * as db from './src';
 
 const pool = new pg.Pool({ connectionString: 'postgresql://localhost/mostly_ormless' });
 
-const tsTypeForPgType = (pgType: string) => {
+type EnumData = { [k: string]: string[] };
+
+const enumDataForSchema = async (schemaName: string) => {
+  const
+    rows = await db.sql<db.SQL>`
+      SELECT n.${"nspname"} AS "schema", t.${"typname"} AS "name", e.${"enumlabel"} AS value
+      FROM ${"pg_type"} t
+      JOIN ${"pg_enum"} e ON t.${"oid"} = e.${"enumtypid"}
+      JOIN ${'"pg_catalog"."pg_namespace"'} n ON n.${"oid"} = t.${"typnamespace"}
+      WHERE n.${"nspname"} = ${db.param(schemaName)}
+      ORDER BY t.${"typname"} ASC, e.${"enumlabel"} ASC`.run(pool),
+
+    enums: EnumData = rows.reduce((memo, row) => {
+      memo[row.name] = memo[row.name] ?? [];
+      memo[row.name].push(row.value);
+      return memo;
+    }, {});
+
+  return enums;
+}
+
+const enumTypesForEnumData = (enums: EnumData) => {
+  const types = Object.keys(enums)
+    .map(name => `
+export type ${name} = ${enums[name].map(v => `'${v}'`).join(' | ')};
+export namespace every {
+  export type ${name} = [${enums[name].map(v => `'${v}'`).join(', ')}];
+}`)
+    .join('');
+
+  return types;
+}
+
+const tsTypeForPgType = (pgType: string, enums: EnumData) => {
   switch (pgType) {
     case 'bpchar':
     case 'char':
@@ -59,12 +92,14 @@ const tsTypeForPgType = (pgType: string) => {
     case '_timestamptz':
       return 'Date[]';
     default:
+      if (enums.hasOwnProperty(pgType)) return pgType;
+
       console.log(`Type ${pgType} not found: mapped to any`);
       return 'any';
   }
 }
 
-const definitionForTableInSchema = async (tableName: string, schemaName: string) => {
+const definitionForTableInSchema = async (tableName: string, schemaName: string, enums: EnumData) => {
   const
     rows = await db.sql<db.SQL>`
       SELECT
@@ -80,7 +115,7 @@ const definitionForTableInSchema = async (tableName: string, schemaName: string)
     rows.forEach(row => {
       const
         { column, nullable, hasDefault } = row,
-        type = tsTypeForPgType(row.pgType),
+        type = tsTypeForPgType(row.pgType, enums),
         insertablyOptional = nullable || hasDefault ? '?' : '',
         orNull = nullable ? ' | null' : '',
         orDateString = type === 'Date' ? ' | DateString' :
@@ -116,33 +151,6 @@ const tablesInSchema = async (schemaName: string): Promise<string[]> => {
     GROUP BY ${"table_name"} ORDER BY lower(${"table_name"})`.run(pool);
 
   return rows.map(r => r.table_name);
-}
-
-const enumTypesForSchema = async (schemaName: string) => {
-  const
-    rows = await db.sql<db.SQL>`
-      SELECT n.${"nspname"} AS "schema", t.${"typname"} AS "name", e.${"enumlabel"} AS value
-      FROM ${"pg_type"} t
-      JOIN ${"pg_enum"} e ON t.${"oid"} = e.${"enumtypid"}
-      JOIN ${'"pg_catalog"."pg_namespace"'} n ON n.${"oid"} = t.${"typnamespace"}
-      WHERE n.${"nspname"} = ${db.param(schemaName)}
-      ORDER BY t.${"typname"} ASC, e.${"enumlabel"} ASC`.run(pool),
-
-    enums: { [k: string]: string[] } = rows.reduce((memo, row) => {
-      memo[row.name] = memo[row.name] ?? [];
-      memo[row.name].push(row.value);
-      return memo;
-    }, {}),
-
-    types = Object.keys(enums)
-      .map(name => `
-export type ${name} = ${enums[name].map(v => `'${v}'`).join(' | ')};
-export namespace every {
-  export type ${name} = [${enums[name].map(v => `'${v}'`).join(', ')}];
-}`)
-      .join('');
-
-  return types;
 }
 
 const crossTableTypesForTables = (tableNames: string[]) => `
@@ -195,17 +203,19 @@ const tsFileForSchemaRules = async (schemas: SchemaRules = { public: { include: 
         rules = schemas[schema],
         tables = rules.exclude === '*' ? [] :
           (rules.include === '*' ? await tablesInSchema(schema) : rules.include)
-            .filter(table => rules.exclude.indexOf(table) < 0);
+            .filter(table => rules.exclude.indexOf(table) < 0),
+        enums = await enumDataForSchema(schema);
 
       return `\n/* === schema: ${schema} === */\n` +
-        (await enumTypesForSchema(schema)) +
+        enumTypesForEnumData(enums) +
         (await Promise.all(
-          tables.map(async table => definitionForTableInSchema(table, schema))
+          tables.map(async table => definitionForTableInSchema(table, schema, enums))
         )).join('\n') +
         crossTableTypesForTables(tables);
     }))
   ).join('\n\n');
 
+  
 (async () => {
   console.log(
     await tsFileForSchemaRules({
