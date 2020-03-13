@@ -1,25 +1,28 @@
 
 import * as pg from 'pg';
 import * as db from './src';
+import * as s from './schema'
+
+db.setConfig({ verbose: true });
 
 type EnumData = { [k: string]: string[] };
 
 const enumDataForSchema = async (schemaName: string, pool: db.Queryable) => {
   const
-    rows = await db.sql<db.SQL>`
+    rows = await db.sql<s.pg_type.SQL | s.pg_enum.SQL | s.pg_namespace.SQL>`
       SELECT n.${"nspname"} AS "schema", t.${"typname"} AS "name", e.${"enumlabel"} AS value
       FROM ${"pg_type"} t
       JOIN ${"pg_enum"} e ON t.${"oid"} = e.${"enumtypid"}
-      JOIN ${'"pg_catalog"."pg_namespace"'} n ON n.${"oid"} = t.${"typnamespace"}
+      JOIN ${"pg_namespace"} n ON n.${"oid"} = t.${"typnamespace"}
       WHERE n.${"nspname"} = ${db.param(schemaName)}
       ORDER BY t.${"typname"} ASC, e.${"enumlabel"} ASC`.run(pool),
-
+    
     enums: EnumData = rows.reduce((memo, row) => {
       memo[row.name] = memo[row.name] ?? [];
       memo[row.name].push(row.value);
       return memo;
     }, {});
-
+  
   return enums;
 }
 
@@ -98,7 +101,7 @@ const tsTypeForPgType = (pgType: string, enums: EnumData) => {
 }
 
 const tablesInSchema = async (schemaName: string, pool: db.Queryable): Promise<string[]> => {
-  const rows = await db.sql<db.SQL>`
+  const rows = await db.sql<s.information_schema.columns.SQL>`
     SELECT ${"table_name"} FROM ${'"information_schema"."columns"'} 
     WHERE ${{ table_schema: schemaName }} 
     GROUP BY ${"table_name"} ORDER BY lower(${"table_name"})`.run(pool);
@@ -108,7 +111,7 @@ const tablesInSchema = async (schemaName: string, pool: db.Queryable): Promise<s
 
 const definitionForTableInSchema = async (tableName: string, schemaName: string, enums: EnumData, pool: db.Queryable) => {
   const
-    rows = await db.sql<db.SQL>`
+    rows = await db.sql<s.information_schema.columns.SQL>`
       SELECT
         ${"column_name"} AS "column"
       , ${"is_nullable"} = 'YES' AS "nullable"
@@ -116,6 +119,7 @@ const definitionForTableInSchema = async (tableName: string, schemaName: string,
       , ${"udt_name"} AS "pgType"
       FROM ${'"information_schema"."columns"'}
       WHERE ${{ table_name: tableName, table_schema: schemaName }}`.run(pool),
+    
     selectables: string[] = [],
     insertables: string[] = [];
 
@@ -125,8 +129,7 @@ const definitionForTableInSchema = async (tableName: string, schemaName: string,
         type = tsTypeForPgType(row.pgType, enums),
         insertablyOptional = nullable || hasDefault ? '?' : '',
         orNull = nullable ? ' | null' : '',
-        orDateString = type === 'Date' ? ' | DateString' :
-          type === 'Date[]' ? ' | DateString[]' : '',
+        orDateString = type === 'Date' ? ' | DateString' : type === 'Date[]' ? ' | DateString[]' : '',
         orDefault = nullable || hasDefault ? ' | DefaultType' : '';
 
         selectables.push(`${column}: ${type}${orNull};`);
