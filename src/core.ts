@@ -7,7 +7,7 @@ import {
   Column,
 } from '../schema';
 
-import { config } from './config';
+import { getConfig } from './config';
 import { TxnClient } from './transaction';
 
 
@@ -69,7 +69,7 @@ export class SQLFragment<RunResult = pg.QueryResult['rows']> {
 
   async run(queryable: Queryable): Promise<RunResult> {
     const query = this.compile();
-    if (config.verbose) console.log(query);
+    if (getConfig().verbose) console.log(query);
     const qr = await queryable.query(query);
     return this.runResultTransform(qr);
   }

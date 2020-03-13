@@ -25,7 +25,7 @@ import {
   raw,
 } from './core';
 
-import { completeKeysWithDefault, mapWithSeparator } from './helpers';
+import { completeKeysWithDefault, mapWithSeparator } from './utils';
 
 type JSONSelectableForTable<T extends Table> = { [K in keyof SelectableForTable<T>]:
   Date extends SelectableForTable<T>[K] ? Exclude<SelectableForTable<T>[K], Date> | DateString :

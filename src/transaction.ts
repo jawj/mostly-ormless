@@ -1,8 +1,8 @@
 import * as pg from 'pg';
 import { isDatabaseError } from './pgErrors';
-import { wait } from './helpers';
+import { wait } from './utils';
 import { sql, raw } from './core';
-import { config } from "./config";
+import { getConfig } from "./config";
 
 
 export enum Isolation {
@@ -42,6 +42,7 @@ export async function transaction<T, M extends Isolation>(
   const
     txnId = txnSeq++,
     txnClient = await pool.connect() as TxnClient<typeof isolationMode>,
+    config = getConfig(),
     maxAttempts = config.transactionAttemptsMax,
     { minMs, maxMs } = config.transactionRetryDelay;
   
