@@ -2,11 +2,9 @@
 import * as pg from 'pg';
 import * as db from './src';
 
-const pool = new pg.Pool({ connectionString: 'postgresql://localhost/mostly_ormless' });
-
 type EnumData = { [k: string]: string[] };
 
-const enumDataForSchema = async (schemaName: string) => {
+const enumDataForSchema = async (schemaName: string, pool: db.Queryable) => {
   const
     rows = await db.sql<db.SQL>`
       SELECT n.${"nspname"} AS "schema", t.${"typname"} AS "name", e.${"enumlabel"} AS value
@@ -99,7 +97,16 @@ const tsTypeForPgType = (pgType: string, enums: EnumData) => {
   }
 }
 
-const definitionForTableInSchema = async (tableName: string, schemaName: string, enums: EnumData) => {
+const tablesInSchema = async (schemaName: string, pool: db.Queryable): Promise<string[]> => {
+  const rows = await db.sql<db.SQL>`
+    SELECT ${"table_name"} FROM ${'"information_schema"."columns"'} 
+    WHERE ${{ table_schema: schemaName }} 
+    GROUP BY ${"table_name"} ORDER BY lower(${"table_name"})`.run(pool);
+
+  return rows.map(r => r.table_name);
+}
+
+const definitionForTableInSchema = async (tableName: string, schemaName: string, enums: EnumData, pool: db.Queryable) => {
   const
     rows = await db.sql<db.SQL>`
       SELECT
@@ -142,15 +149,6 @@ export namespace ${tableName} {
   export type SQLExpression = GenericSQLExpression | Table | Whereable | Column | ColumnNames<Updatable | (keyof Updatable)[]> | ColumnValues<Updatable>;
   export type SQL = SQLExpression | SQLExpression[];
 }`;
-}
-
-const tablesInSchema = async (schemaName: string): Promise<string[]> => {
-  const rows = await db.sql<db.SQL>`
-    SELECT ${"table_name"} FROM ${'"information_schema"."columns"'} 
-    WHERE ${{ table_schema: schemaName }} 
-    GROUP BY ${"table_name"} ORDER BY lower(${"table_name"})`.run(pool);
-
-  return rows.map(r => r.table_name);
 }
 
 const crossTableTypesForTables = (tableNames: string[]) => `
@@ -196,33 +194,37 @@ interface SchemaRules {
   }
 }
 
-const tsFileForSchemaRules = async (schemas: SchemaRules = { public: { include: '*', exclude: [] }}) =>
-  header() + (await Promise.all(
+const tsForDBConfigAndSchemaRules = async (dbConfig: pg.ClientConfig, schemas: SchemaRules = { public: { include: '*', exclude: [] } }) => {
+  const
+    pool = new pg.Pool(dbConfig),
+    ts = header() + (await Promise.all(
     Object.keys(schemas).map(async schema => {
       const
         rules = schemas[schema],
         tables = rules.exclude === '*' ? [] :
-          (rules.include === '*' ? await tablesInSchema(schema) : rules.include)
+          (rules.include === '*' ? await tablesInSchema(schema, pool) : rules.include)
             .filter(table => rules.exclude.indexOf(table) < 0),
-        enums = await enumDataForSchema(schema);
+        enums = await enumDataForSchema(schema, pool),
+        tableDefs = await Promise.all(tables.map(async table => definitionForTableInSchema(table, schema, enums, pool)));
 
       return `\n/* === schema: ${schema} === */\n` +
         enumTypesForEnumData(enums) +
-        (await Promise.all(
-          tables.map(async table => definitionForTableInSchema(table, schema, enums))
-        )).join('\n') +
+        tableDefs.join('\n') +
         crossTableTypesForTables(tables);
     }))
   ).join('\n\n');
 
-  
-(async () => {
-  console.log(
-    await tsFileForSchemaRules({
-      public: {
-        include: '*',
-        exclude: ['geography_columns', 'geometry_columns', 'raster_columns', 'raster_overviews', 'spatial_ref_sys'],
-      }
-    }));
   pool.end();
+  return ts;
+}
+
+
+(async () => {
+  const ts = await tsForDBConfigAndSchemaRules({ connectionString: 'postgresql://localhost/mostly_ormless' }, {
+    public: {
+      include: '*',
+      exclude: ['geography_columns', 'geometry_columns', 'raster_columns', 'raster_overviews', 'spatial_ref_sys'],
+    }
+  });
+  console.log(ts);
 })();
