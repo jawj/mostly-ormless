@@ -1,6 +1,8 @@
 Mostly ORMless: ergonomic Postgres from TypeScript
 ==
 
+** Please note: I have now turned this approach into a library: see https://jawj.github.io/zapatos/**
+
 _I gave [a very brief outline of this on HN](https://news.ycombinator.com/item?id=19853066) and a few people sounded interested, so here goes. It's extracted from my work as co-founder/CTO at [PSYT](https://www.psyt.co.uk)._
 
 TypeScript and VS Code are [wonderful](https://stackoverflow.com/questions/12694530/what-is-typescript-and-why-would-i-use-it-in-place-of-javascript/35048303#35048303). ORMs are [problematic](https://en.wikipedia.org/wiki/Object-relational_impedance_mismatch). 
