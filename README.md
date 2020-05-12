@@ -1,7 +1,8 @@
 Mostly ORMless: ergonomic Postgres from TypeScript
 ==
 
-** Please note: I have now turned this approach into a library: see https://jawj.github.io/zapatos/**
+**I have now turned this approach into a library: please see https://jawj.github.io/zapatos/ for details**
+--
 
 _I gave [a very brief outline of this on HN](https://news.ycombinator.com/item?id=19853066) and a few people sounded interested, so here goes. It's extracted from my work as co-founder/CTO at [PSYT](https://www.psyt.co.uk)._
 
@@ -782,3 +783,6 @@ Where next?
 --
 
 If you think this approach could be useful in your own projects, feel free to adopt/adapt it. I'd be interested to hear how you get on. I could of course create an npm library for all this, but I think it's much more truly ORMless if you just take the code (`core.ts` is less than 400 lines), understand it, and make it your own.
+
+**I have now turned this approach into a library: please see https://jawj.github.io/zapatos/ for details**
+--
