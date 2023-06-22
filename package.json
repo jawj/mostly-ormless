@@ -18,7 +18,7 @@
   "homepage": "https://github.com/jawj/mostly-ormless#readme",
   "dependencies": {
     "@types/pg": "^7.4.14",
-    "pg": "^7.11.0",
+    "pg": "^8.11.0",
     "ts-node": "^8.3.0",
     "typescript": "^3.5.2"
   }
